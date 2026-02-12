@@ -5,6 +5,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import SignOutButton from "./SignOutButton";
 import CampaignDropdown from "./CampaignDropdown";
+import CandidatesNavLink from "./admin/CandidatesNavLink";
 
 export default async function DashboardLayout({
   children,
@@ -64,6 +65,7 @@ export default async function DashboardLayout({
               <Link href="/admin" className="text-sm text-gray-600 dark:text-gray-400 hover:underline">
                 Dashboard
               </Link>
+              <CandidatesNavLink defaultCampaignId={defaultCampaignId} />
               <Link href="/admin/campaigns" className="text-sm text-gray-600 dark:text-gray-400 hover:underline">
                 Campaigns
               </Link>

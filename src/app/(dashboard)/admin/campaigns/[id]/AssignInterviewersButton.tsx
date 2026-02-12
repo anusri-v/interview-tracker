@@ -14,7 +14,7 @@ export default function AssignInterviewersButton({
       href={`/admin/candidates/${candidateId}/assign`}
       className="text-blue-600 hover:underline text-sm"
     >
-      Assign interviewers
+      Assign interview
     </Link>
   );
 }

@@ -31,7 +31,7 @@ async function assignInterviewers(
     })),
     skipDuplicates: true,
   });
-  redirect(`/admin/campaigns/${candidate.campaignId}`);
+  redirect(`/admin/campaigns/${candidate.campaignId}/candidates`);
 }
 
 export default async function AssignInterviewersPage({
@@ -66,12 +66,12 @@ export default async function AssignInterviewersPage({
   return (
     <div className="max-w-md space-y-4">
       <Link
-        href={`/admin/campaigns/${candidate.campaignId}`}
+        href={`/admin/campaigns/${candidate.campaignId}/candidates`}
         className="text-sm text-blue-600 hover:underline"
       >
-        ← Back to {candidate.campaign.name}
+        ← Back to candidates
       </Link>
-      <h1 className="text-2xl font-bold">Assign interviewers</h1>
+      <h1 className="text-2xl font-bold">Assign interview</h1>
       <p className="text-sm text-gray-500">
         Candidate: {candidate.name} ({candidate.email})
       </p>

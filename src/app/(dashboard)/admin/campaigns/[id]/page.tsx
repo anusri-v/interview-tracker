@@ -13,14 +13,7 @@ export default async function CampaignDetailPage({
   const campaign = await prisma.campaign.findUnique({
     where: { id },
     include: {
-      candidates: {
-        orderBy: { createdAt: "desc" },
-        include: {
-          interviews: {
-            include: { interviewer: { select: { name: true, email: true } } },
-          },
-        },
-      },
+      candidates: { orderBy: { createdAt: "desc" } },
     },
   });
   if (!campaign) notFound();
@@ -80,14 +73,20 @@ export default async function CampaignDetailPage({
                   <th className="text-left p-2">Resume</th>
                   <th className="text-left p-2">Status</th>
                   <th className="text-left p-2">Role</th>
-                  <th className="text-left p-2">Interviewers</th>
                   {isActive && <th className="text-left p-2">Actions</th>}
                 </tr>
               </thead>
               <tbody>
                 {campaign.candidates.map((c) => (
                   <tr key={c.id} className="border-t">
-                    <td className="p-2">{c.name}</td>
+                    <td className="p-2">
+                      <Link
+                        href={`/admin/candidates/${c.id}/details`}
+                        className="text-blue-600 hover:underline"
+                      >
+                        {c.name}
+                      </Link>
+                    </td>
                     <td className="p-2">{c.email}</td>
                     <td className="p-2">{c.phone ?? "—"}</td>
                     <td className="p-2">{c.college ?? "—"}</td>
@@ -101,11 +100,6 @@ export default async function CampaignDetailPage({
                     </td>
                     <td className="p-2">{c.status}</td>
                     <td className="p-2">{c.role ?? "—"}</td>
-                    <td className="p-2">
-                      {c.interviews.length === 0
-                        ? "—"
-                        : c.interviews.map((i) => i.interviewer.name ?? i.interviewer.email).join(", ")}
-                    </td>
                     {isActive && (
                       <td className="p-2 flex gap-2">
                         <AssignInterviewersButton candidateId={c.id} candidateName={c.name} />

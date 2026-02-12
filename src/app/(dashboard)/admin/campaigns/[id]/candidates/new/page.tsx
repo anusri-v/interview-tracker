@@ -10,6 +10,8 @@ async function createCandidate(campaignId: string, formData: FormData) {
   "use server";
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/login");
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true } });
+  if (!campaign || campaign.status === "completed") redirect(`/admin/campaigns/${campaignId}`);
   const name = (formData.get("name") as string)?.trim();
   const email = (formData.get("email") as string)?.trim();
   if (!name || !email) return;
@@ -31,6 +33,7 @@ export default async function NewCandidatePage({
   const { id: campaignId } = await params;
   const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
   if (!campaign) notFound();
+  if (campaign.status === "completed") redirect(`/admin/campaigns/${campaignId}`);
 
   return (
     <div className="max-w-md space-y-4">

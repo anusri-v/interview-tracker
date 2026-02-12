@@ -19,9 +19,10 @@ async function assignInterviewers(
   if (interviewerIds.length === 0) return;
   const candidate = await prisma.candidate.findUnique({
     where: { id: candidateId },
-    select: { campaignId: true },
+    include: { campaign: { select: { status: true } } },
   });
   if (!candidate) redirect("/admin");
+  if (candidate.campaign.status === "completed") redirect(`/admin/campaigns/${candidate.campaignId}`);
   await prisma.interview.createMany({
     data: interviewerIds.map((interviewerId) => ({
       candidateId,
@@ -45,7 +46,7 @@ export default async function AssignInterviewersPage({
   const [candidate, interviewers] = await Promise.all([
     prisma.candidate.findUnique({
       where: { id: candidateId },
-      include: { campaign: { select: { id: true, name: true } } },
+      include: { campaign: { select: { id: true, name: true, status: true } } },
     }),
     prisma.user.findMany({
       where: { role: { in: ["interviewer", "admin"] } },
@@ -53,6 +54,7 @@ export default async function AssignInterviewersPage({
     }),
   ]);
   if (!candidate) notFound();
+  if (candidate.campaign.status === "completed") redirect(`/admin/campaigns/${candidate.campaignId}`);
 
   const existingInterviewerIds = await prisma.interview
     .findMany({

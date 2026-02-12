@@ -45,6 +45,14 @@ export async function POST(
       where: { id },
       data: { status: "completed", completedAt: new Date() },
     }),
+    ...(body.result === "NO_HIRE"
+      ? [
+          prisma.candidate.update({
+            where: { id: interview.candidateId },
+            data: { status: "rejected" },
+          }),
+        ]
+      : []),
   ]);
   return NextResponse.json({ ok: true });
 }

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
 import AssignInterviewersButton from "./AssignInterviewersButton";
+import MarkCampaignCompletedButton from "./MarkCampaignCompletedButton";
 
 export default async function CampaignDetailPage({
   params,
@@ -24,24 +25,42 @@ export default async function CampaignDetailPage({
   });
   if (!campaign) notFound();
 
+  const isActive = campaign.status === "active";
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{campaign.name}</h1>
-        <div className="flex gap-2">
-          <Link
-            href={`/admin/campaigns/${id}/candidates/new`}
-            className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold">{campaign.name}</h1>
+          <span
+            className={`px-2 py-0.5 rounded text-sm font-medium ${
+              campaign.status === "active"
+                ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
+                : "bg-gray-200 text-gray-700 dark:bg-zinc-700 dark:text-zinc-300"
+            }`}
           >
-            Add candidate
-          </Link>
-          <Link
-            href={`/admin/campaigns/${id}/candidates/upload`}
-            className="px-3 py-1 border rounded text-sm hover:bg-gray-100 dark:hover:bg-zinc-800"
-          >
-            Upload CSV
-          </Link>
+            {campaign.status === "active" ? "Active" : "Completed"}
+          </span>
+          {isActive && (
+            <MarkCampaignCompletedButton campaignId={id} campaignName={campaign.name} />
+          )}
         </div>
+        {isActive && (
+          <div className="flex gap-2">
+            <Link
+              href={`/admin/campaigns/${id}/candidates/new`}
+              className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+            >
+              Add candidate
+            </Link>
+            <Link
+              href={`/admin/campaigns/${id}/candidates/upload`}
+              className="px-3 py-1 border rounded text-sm hover:bg-gray-100 dark:hover:bg-zinc-800"
+            >
+              Upload CSV
+            </Link>
+          </div>
+        )}
       </div>
 
       <section>
@@ -62,7 +81,7 @@ export default async function CampaignDetailPage({
                   <th className="text-left p-2">Status</th>
                   <th className="text-left p-2">Role</th>
                   <th className="text-left p-2">Interviewers</th>
-                  <th className="text-left p-2">Actions</th>
+                  {isActive && <th className="text-left p-2">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -87,15 +106,17 @@ export default async function CampaignDetailPage({
                         ? "—"
                         : c.interviews.map((i) => i.interviewer.name ?? i.interviewer.email).join(", ")}
                     </td>
-                    <td className="p-2 flex gap-2">
-                      <AssignInterviewersButton candidateId={c.id} candidateName={c.name} />
-                      <Link
-                        href={`/admin/candidates/${c.id}/edit`}
-                        className="text-sm text-gray-600 hover:underline"
-                      >
-                        Edit status
-                      </Link>
-                    </td>
+                    {isActive && (
+                      <td className="p-2 flex gap-2">
+                        <AssignInterviewersButton candidateId={c.id} candidateName={c.name} />
+                        <Link
+                          href={`/admin/candidates/${c.id}/edit`}
+                          className="text-sm text-gray-600 hover:underline"
+                        >
+                          Edit status
+                        </Link>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

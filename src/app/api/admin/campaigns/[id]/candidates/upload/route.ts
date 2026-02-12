@@ -16,6 +16,9 @@ export async function POST(
   if (!campaign) {
     return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
   }
+  if (campaign.status === "completed") {
+    return NextResponse.json({ error: "Campaign is completed; cannot add candidates" }, { status: 400 });
+  }
   let body: {
     candidates: {
       name: string;

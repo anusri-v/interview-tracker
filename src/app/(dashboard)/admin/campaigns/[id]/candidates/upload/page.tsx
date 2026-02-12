@@ -2,6 +2,9 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
 import CsvUploadForm from "./CsvUploadForm";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
 export default async function UploadCandidatesPage({
   params,
@@ -9,8 +12,11 @@ export default async function UploadCandidatesPage({
   params: Promise<{ id: string }>;
 }) {
   const { id: campaignId } = await params;
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id || session.user.role !== "admin") redirect("/login");
   const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
   if (!campaign) notFound();
+  if (campaign.status === "completed") redirect(`/admin/campaigns/${campaignId}`);
 
   return (
     <div className="max-w-lg space-y-4">

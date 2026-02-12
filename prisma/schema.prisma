@@ -30,6 +30,11 @@ enum InterviewResult {
   WEAK_HIRE
 }
 
+enum CampaignStatus {
+  active
+  completed
+}
+
 model User {
   id            String    @id @default(cuid())
   email         String    @unique
@@ -43,12 +48,13 @@ model User {
 }
 
 model Campaign {
-  id          String   @id @default(cuid())
+  id          String         @id @default(cuid())
   name        String
+  status      CampaignStatus @default(active)
   createdById String
-  createdBy   User     @relation("CampaignCreator", fields: [createdById], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdBy   User           @relation("CampaignCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
   candidates  Candidate[]
 }
 

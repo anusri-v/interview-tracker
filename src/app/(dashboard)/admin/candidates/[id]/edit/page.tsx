@@ -14,14 +14,21 @@ async function updateCandidate(
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || session.user.role !== "admin") redirect("/login");
   const status = formData.get("status") as string;
-  const role = (formData.get("role") as string)?.trim() || null;
+  const roleChoice = (formData.get("role") as string)?.trim() || null;
+  const roleOther = (formData.get("roleOther") as string)?.trim() || null;
+  const role = roleChoice === "Other" ? roleOther : roleChoice;
   const phone = (formData.get("phone") as string)?.trim() || null;
   const college = (formData.get("college") as string)?.trim() || null;
   const department = (formData.get("department") as string)?.trim() || null;
   const resumeLink = (formData.get("resumeLink") as string)?.trim() || null;
   if (!status || !["rejected", "in_pipeline", "selected"].includes(status)) return;
-  const c = await prisma.candidate.findUnique({ where: { id: candidateId }, select: { campaignId: true } });
+  if (status === "selected" && !role) return;
+  const c = await prisma.candidate.findUnique({
+    where: { id: candidateId },
+    include: { campaign: { select: { id: true, status: true } } },
+  });
   if (!c) redirect("/admin");
+  if (c.campaign.status === "completed") redirect(`/admin/campaigns/${c.campaignId}`);
   await prisma.candidate.update({
     where: { id: candidateId },
     data: {
@@ -47,9 +54,10 @@ export default async function EditCandidatePage({
   const { id } = await params;
   const candidate = await prisma.candidate.findUnique({
     where: { id },
-    include: { campaign: { select: { id: true, name: true } } },
+    include: { campaign: { select: { id: true, name: true, status: true } } },
   });
   if (!candidate) notFound();
+  if (candidate.campaign.status === "completed") redirect(`/admin/campaigns/${candidate.campaignId}`);
 
   return (
     <div className="max-w-md space-y-4">

@@ -24,9 +24,20 @@ export default async function CampaignsListPage() {
         <ul className="space-y-2">
           {campaigns.map((c) => (
             <li key={c.id} className="border rounded p-3 flex items-center justify-between">
-              <Link href={`/admin/campaigns/${c.id}`} className="font-medium text-blue-600 hover:underline">
-                {c.name}
-              </Link>
+              <div className="flex items-center gap-2">
+                <Link href={`/admin/campaigns/${c.id}`} className="font-medium text-blue-600 hover:underline">
+                  {c.name}
+                </Link>
+                <span
+                  className={`px-1.5 py-0.5 rounded text-xs ${
+                    c.status === "active"
+                      ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
+                      : "bg-gray-200 text-gray-600 dark:bg-zinc-700 dark:text-zinc-400"
+                  }`}
+                >
+                  {c.status}
+                </span>
+              </div>
               <span className="text-sm text-gray-500">{c._count.candidates} candidates</span>
             </li>
           ))}

@@ -2,8 +2,9 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import Link from "next/link";
-import { signOut } from "next-auth/react";
+import { prisma } from "@/lib/db";
 import SignOutButton from "./SignOutButton";
+import CampaignDropdown from "./CampaignDropdown";
 
 export default async function DashboardLayout({
   children,
@@ -14,6 +15,42 @@ export default async function DashboardLayout({
   if (!session) redirect("/login");
 
   const isAdmin = session.user.role === "admin";
+  const [campaigns, defaultCampaignId] = await Promise.all([
+    isAdmin
+      ? prisma.campaign.findMany({
+          orderBy: { name: "asc" },
+          select: { id: true, name: true },
+        })
+      : prisma.campaign.findMany({
+          where: {
+            candidates: {
+              some: {
+                interviews: { some: { interviewerId: session.user.id! } },
+              },
+            },
+          },
+          orderBy: { name: "asc" },
+          select: { id: true, name: true },
+        }),
+    isAdmin
+      ? prisma.campaign.findFirst({
+          where: { status: "active" },
+          orderBy: { createdAt: "desc" },
+          select: { id: true },
+        }).then((c) => c?.id ?? null)
+      : prisma.campaign.findFirst({
+          where: {
+            status: "active",
+            candidates: {
+              some: {
+                interviews: { some: { interviewerId: session.user.id! } },
+              },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+          select: { id: true },
+        }).then((c) => c?.id ?? null),
+  ]);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -46,7 +83,12 @@ export default async function DashboardLayout({
             </>
           )}
         </nav>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <CampaignDropdown
+            campaigns={campaigns}
+            basePath={isAdmin ? "admin" : "interviewer"}
+            defaultCampaignId={defaultCampaignId}
+          />
           <span className="text-sm text-gray-600 dark:text-gray-400">
             {session.user.email} ({session.user.role})
           </span>

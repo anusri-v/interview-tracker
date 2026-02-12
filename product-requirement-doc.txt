@@ -1,0 +1,20 @@
+Candidate recruitment management system: 
+    To create a system that will be useful for the company to keep track of the candidates, their information and their status
+
+Flow of the system: 
+User with admin role: 
+1. Login with their gmail. User with admin role will be able to assign other people as admin as well. 
+2. They will create a new campaign. Eg., 'TCE-2026', 'Mepco-2026'
+3. They can create new candidates by uploading a CSV file. Or they can create a new candidate manually. The candidate can only be created after the campaign is created.
+4. They will have a list of interviewers. They can assign interviewers to the candidates.
+5. They will have access to a dashboard where they can see: 
+    5.1. Total number of candidates in the campaign, number of candidates rejected, still in the pipeline, and the number of candidates selected. 
+    5.2. Number of interviews conducted so far, number of interviews currently ongoing and number of interviews scheduled. 
+    5.3. Number of candidates selected and their roles. 
+
+User with interviewer role: 
+1. Login with their gmail. People will have interviewer role by default. 
+2. They will see the interview scheduled for them. They will be able to see the candidate's details, and their past interview feedbacks. 
+3. They will be able to start the interview by clicking on the start interview button. When the interview gets concluded, they will be able to mark the interview as completed. They will be able to give the feedback and any pointers for the next interviewer. 
+4. They will be able to see the list of candidates they have interviewed so far. 
+5. They will have a simple dashboard to see their past interview numbers and results, and the upcoming interviews if any. 

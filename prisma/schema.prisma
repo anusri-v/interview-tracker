@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  admin
+  interviewer
+}
+
+enum CandidateStatus {
+  rejected
+  in_pipeline
+  selected
+}
+
+enum InterviewStatus {
+  scheduled
+  ongoing
+  completed
+}
+
+enum InterviewResult {
+  HIRE
+  NO_HIRE
+  WEAK_HIRE
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  image         String?
+  role          UserRole  @default(interviewer)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  createdCampaigns Campaign[] @relation("CampaignCreator")
+  interviewsConducted Interview[]
+}
+
+model Campaign {
+  id          String   @id @default(cuid())
+  name        String
+  createdById String
+  createdBy   User     @relation("CampaignCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  candidates  Candidate[]
+}
+
+model Candidate {
+  id          String         @id @default(cuid())
+  campaignId  String
+  campaign    Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  name        String
+  email       String
+  phone       String?
+  college     String?
+  department  String?
+  resumeLink  String?
+  status      CandidateStatus @default(in_pipeline)
+  role        String?        // role when selected (e.g. "Software Engineer")
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  interviews  Interview[]
+
+  @@unique([campaignId, email])
+  @@index([campaignId, status])
+}
+
+model Interview {
+  id           String         @id @default(cuid())
+  candidateId  String
+  candidate    Candidate     @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  interviewerId String
+  interviewer  User          @relation(fields: [interviewerId], references: [id], onDelete: Cascade)
+  scheduledAt  DateTime
+  status       InterviewStatus @default(scheduled)
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  feedback     Feedback?
+
+  @@unique([candidateId, interviewerId])
+  @@index([interviewerId, status])
+  @@index([candidateId])
+}
+
+model Feedback {
+  id                      String         @id @default(cuid())
+  interviewId              String         @unique
+  interview                Interview      @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  result                  InterviewResult @default(HIRE)
+  feedback                String
+  pointersForNextInterviewer String
+  createdAt               DateTime       @default(now())
+}

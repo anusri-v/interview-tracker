@@ -128,23 +128,26 @@ export default function Sidebar({
 
   // Determine candidates href: use campaign from path when on campaign subpath, else session/default
   const campaignIdMatch = pathname.match(/^\/admin\/campaigns\/([^/]+)/);
-  const candidatesCampaignId = campaignIdMatch?.[1] ?? selectedId || defaultCampaignId;
+  const candidatesCampaignId = campaignIdMatch?.[1] ?? (selectedId || defaultCampaignId);
   const candidatesHref = candidatesCampaignId
     ? `/admin/campaigns/${candidatesCampaignId}/candidates`
     : "/admin/candidates";
 
+  // Build campaign-aware hrefs so navigation preserves the selected campaign
+  const campaignQuery = selectedId ? `?campaignId=${selectedId}` : "";
+
   // Nav items based on role
   const navItems = isAdmin
     ? [
-        { href: "/admin", label: "Dashboard", icon: DashboardIcon, match: (p: string) => p === "/admin" },
-        { href: "/interviewer/interviews", label: "My Interviews", icon: InterviewsIcon, match: (p: string) => p.startsWith("/interviewer/interviews") },
+        { href: `/admin${campaignQuery}`, label: "Dashboard", icon: DashboardIcon, match: (p: string) => p === "/admin" },
+        { href: `/interviewer/interviews${campaignQuery}`, label: "My Interviews", icon: InterviewsIcon, match: (p: string) => p.startsWith("/interviewer/interviews") },
         { href: candidatesHref, label: "Candidates", icon: CandidatesIcon, match: (p: string) => p.includes("/candidates") },
         { href: "/admin/campaigns", label: "Campaigns", icon: CampaignsIcon, match: (p: string) => p === "/admin/campaigns" || p === "/admin/campaigns/new" },
         { href: "/admin/users", label: "Manage Admins", icon: AdminsIcon, match: (p: string) => p === "/admin/users" },
       ]
     : [
-        { href: "/interviewer", label: "Dashboard", icon: DashboardIcon, match: (p: string) => p === "/interviewer" },
-        { href: "/interviewer/interviews", label: "My Interviews", icon: InterviewsIcon, match: (p: string) => p.startsWith("/interviewer/interviews") },
+        { href: `/interviewer${campaignQuery}`, label: "Dashboard", icon: DashboardIcon, match: (p: string) => p === "/interviewer" },
+        { href: `/interviewer/interviews${campaignQuery}`, label: "My Interviews", icon: InterviewsIcon, match: (p: string) => p.startsWith("/interviewer/interviews") },
       ];
 
   const initials = email.slice(0, 2).toUpperCase();

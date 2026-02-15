@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { signOut } from "next-auth/react";
+import { useResolvedCampaignId } from "@/hooks/useResolvedCampaignId";
 
 type Campaign = { id: string; name: string };
 
@@ -75,7 +76,7 @@ export default function Sidebar({
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Campaign dropdown logic (same as CampaignDropdown)
+  // Campaign dropdown logic (same as CampaignDropdown), with session persistence
   const campaignPrefix = `/${basePath}/campaigns/`;
   const isMyInterviewsPage =
     pathname === "/interviewer/interviews" || pathname.startsWith("/interviewer/interviews/");
@@ -90,12 +91,20 @@ export default function Sidebar({
     isMyInterviewsPage || isAdminDashboardPage || isInterviewerDashboardPage
       ? searchParams.get("campaignId")
       : null;
-  const selectedId =
-    isMyInterviewsPage || isAdminDashboardPage || isInterviewerDashboardPage
-      ? (campaignIdFromQuery ?? defaultCampaignId ?? "")
-      : (currentIdFromPath || defaultCampaignId || "");
+
+  const useQueryOrPathForDashboard =
+    isMyInterviewsPage || isAdminDashboardPage || isInterviewerDashboardPage;
+  const { selectedId, persistCampaignId } = useResolvedCampaignId({
+    basePath,
+    campaigns,
+    defaultCampaignId,
+    currentIdFromPath,
+    campaignIdFromQuery,
+    useQueryOrPathForDashboard,
+  });
 
   function handleCampaignChange(id: string) {
+    persistCampaignId(id || null);
     if (isMyInterviewsPage) {
       const params = new URLSearchParams(searchParams.toString());
       if (id) params.set("campaignId", id);
@@ -117,9 +126,9 @@ export default function Sidebar({
     }
   }
 
-  // Determine candidates href
+  // Determine candidates href: use campaign from path when on campaign subpath, else session/default
   const campaignIdMatch = pathname.match(/^\/admin\/campaigns\/([^/]+)/);
-  const candidatesCampaignId = campaignIdMatch?.[1] ?? defaultCampaignId;
+  const candidatesCampaignId = campaignIdMatch?.[1] ?? selectedId || defaultCampaignId;
   const candidatesHref = candidatesCampaignId
     ? `/admin/campaigns/${candidatesCampaignId}/candidates`
     : "/admin/candidates";

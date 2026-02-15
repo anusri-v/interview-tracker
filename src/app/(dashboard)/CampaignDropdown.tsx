@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useResolvedCampaignId } from "@/hooks/useResolvedCampaignId";
 
 type Campaign = { id: string; name: string };
 
@@ -30,14 +31,22 @@ export default function CampaignDropdown({
     isMyInterviewsPage || isAdminDashboardPage || isInterviewerDashboardPage
       ? searchParams.get("campaignId")
       : null;
-  const selectedId =
-    isMyInterviewsPage || isAdminDashboardPage || isInterviewerDashboardPage
-      ? (campaignIdFromQuery ?? defaultCampaignId ?? "")
-      : (currentIdFromPath || defaultCampaignId || "");
+
+  const useQueryOrPathForDashboard =
+    isMyInterviewsPage || isAdminDashboardPage || isInterviewerDashboardPage;
+  const { selectedId, persistCampaignId } = useResolvedCampaignId({
+    basePath,
+    campaigns,
+    defaultCampaignId,
+    currentIdFromPath,
+    campaignIdFromQuery,
+    useQueryOrPathForDashboard,
+  });
 
   if (campaigns.length === 0) return null;
 
-  function handleChange(id: string) {
+  function handleChange(id: string, persist: (id: string | null) => void) {
+    persist(id || null);
     if (isMyInterviewsPage) {
       const params = new URLSearchParams(searchParams.toString());
       if (id) params.set("campaignId", id);
@@ -67,7 +76,7 @@ export default function CampaignDropdown({
       <select
         id="campaign-select"
         value={selectedId}
-        onChange={(e) => handleChange(e.target.value)}
+        onChange={(e) => handleChange(e.target.value, persistCampaignId)}
         className="text-sm border border-border rounded px-2 py-1 bg-card text-foreground min-w-[160px]"
       >
         <option value="">— Select —</option>

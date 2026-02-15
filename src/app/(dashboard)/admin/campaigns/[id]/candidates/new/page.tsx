@@ -1,10 +1,11 @@
-import { notFound } from "next/navigation";
-import { prisma } from "@/lib/db";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import CandidateNewForm from "./CandidateNewForm";
 import { getServerSession } from "next-auth";
+import { Prisma } from "@prisma/client";
+
+import { prisma } from "@/lib/db";
 import { authOptions } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import CandidateNewForm from "./CandidateNewForm";
 
 async function createCandidate(campaignId: string, formData: FormData) {
   "use server";
@@ -19,29 +20,69 @@ async function createCandidate(campaignId: string, formData: FormData) {
   const college = (formData.get("college") as string)?.trim() || null;
   const department = (formData.get("department") as string)?.trim() || null;
   const resumeLink = (formData.get("resumeLink") as string)?.trim() || null;
-  await prisma.candidate.create({
-    data: { campaignId, name, email, phone, college, department, resumeLink },
-  });
+  try {
+    await prisma.candidate.create({
+      data: { campaignId, name, email, phone, college, department, resumeLink },
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      const target = error.meta?.target;
+      const targetStr = Array.isArray(target)
+        ? target.join(",")
+        : String(target ?? "");
+      let errorCode: string | null = null;
+      if (targetStr.includes("phone")) {
+        errorCode = "phone_taken";
+      } else if (targetStr.includes("email")) {
+        errorCode = "email_taken";
+      } else {
+        errorCode = "unique";
+      }
+      redirect(
+        `/admin/campaigns/${campaignId}/candidates/new?error=${errorCode}`,
+      );
+    }
+    throw error;
+  }
   redirect(`/admin/campaigns/${campaignId}`);
 }
 
 export default async function NewCandidatePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: { error?: string };
 }) {
   const { id: campaignId } = await params;
   const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
   if (!campaign) notFound();
   if (campaign.status === "completed") redirect(`/admin/campaigns/${campaignId}`);
 
+  const errorParam = searchParams?.error;
+  const errorMessage =
+    errorParam === "phone_taken"
+      ? "This phone number is already associated with another candidate in this campaign."
+      : errorParam === "email_taken"
+      ? "This email is already associated with another candidate in this campaign."
+      : errorParam === "unique"
+      ? "Another candidate with these details already exists."
+      : undefined;
+
   return (
     <div className="max-w-md space-y-4">
-      <Link href={`/admin/campaigns/${campaignId}`} className="text-sm text-blue-600 hover:underline">
+      <Link href={`/admin/campaigns/${campaignId}`} className="text-sm text-primary hover:underline">
         ← Back to {campaign.name}
       </Link>
-      <h1 className="text-2xl font-bold">Add candidate</h1>
-      <CandidateNewForm campaignId={campaignId} createCandidate={createCandidate} />
+      <h1 className="text-4xl font-bold text-foreground tracking-tight">Add Candidate</h1>
+      <CandidateNewForm
+        campaignId={campaignId}
+        createCandidate={createCandidate}
+        error={errorMessage}
+      />
     </div>
   );
 }

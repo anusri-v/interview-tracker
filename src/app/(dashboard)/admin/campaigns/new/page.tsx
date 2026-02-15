@@ -25,7 +25,7 @@ export default async function NewCampaignPage() {
 
   return (
     <div className="max-w-md">
-      <h1 className="text-2xl font-bold mb-4">New campaign</h1>
+      <h1 className="text-4xl font-bold mb-6 text-foreground tracking-tight">New Campaign</h1>
       <CampaignNewForm createCampaign={createCampaign} />
     </div>
   );

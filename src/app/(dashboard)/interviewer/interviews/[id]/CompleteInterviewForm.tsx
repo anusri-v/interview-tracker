@@ -2,10 +2,13 @@
 
 import { useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 export default function CompleteInterviewForm({ interviewId }: { interviewId: string }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [pendingPayload, setPendingPayload] = useState<{ result: string; feedback: string; pointersForNextInterviewer: string } | null>(null);
   const router = useRouter();
 
   const RESULT_OPTIONS = [
@@ -29,11 +32,20 @@ export default function CompleteInterviewForm({ interviewId }: { interviewId: st
       setError("Please select a valid result.");
       return;
     }
+    setPendingPayload({ result, feedback, pointersForNextInterviewer: pointers });
+    setShowConfirm(true);
+  }
+
+  function onConfirm() {
+    if (!pendingPayload) return;
+    setShowConfirm(false);
+    const { result, feedback, pointersForNextInterviewer } = pendingPayload;
+    setPendingPayload(null);
     startTransition(async () => {
       const res = await fetch(`/api/interviewer/interviews/${interviewId}/complete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ result, feedback, pointersForNextInterviewer: pointers }),
+        body: JSON.stringify({ result, feedback, pointersForNextInterviewer }),
       });
       if (!res.ok) {
         setError("Failed to submit.");
@@ -44,15 +56,16 @@ export default function CompleteInterviewForm({ interviewId }: { interviewId: st
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 border rounded p-4">
-      <h2 className="font-semibold">Complete interview</h2>
+    <>
+    <form onSubmit={handleSubmit} className="space-y-4 border border-border rounded-xl bg-card p-6">
+      <h2 className="text-xl font-bold text-foreground tracking-tight">Complete Interview</h2>
       <div>
-        <label htmlFor="result" className="block text-sm font-medium mb-1">Interview result</label>
+        <label htmlFor="result" className="block text-sm font-medium mb-1 text-foreground">Interview result</label>
         <select
           id="result"
           name="result"
           required
-          className="w-full border rounded px-3 py-2 dark:bg-zinc-800 dark:border-zinc-700"
+          className="w-full border border-border rounded px-3 py-2 bg-card text-foreground"
         >
           <option value="">Select result...</option>
           {RESULT_OPTIONS.map((opt) => (
@@ -63,18 +76,18 @@ export default function CompleteInterviewForm({ interviewId }: { interviewId: st
         </select>
       </div>
       <div>
-        <label htmlFor="feedback" className="block text-sm font-medium mb-1">Feedback</label>
+        <label htmlFor="feedback" className="block text-sm font-medium mb-1 text-foreground">Feedback</label>
         <textarea
           id="feedback"
           name="feedback"
           rows={4}
           required
-          className="w-full border rounded px-3 py-2 dark:bg-zinc-800 dark:border-zinc-700"
+          className="w-full border border-border rounded px-3 py-2 bg-background text-foreground placeholder:text-foreground-muted"
           placeholder="Your feedback..."
         />
       </div>
       <div>
-        <label htmlFor="pointersForNextInterviewer" className="block text-sm font-medium mb-1">
+        <label htmlFor="pointersForNextInterviewer" className="block text-sm font-medium mb-1 text-foreground">
           Pointers for next interviewer
         </label>
         <textarea
@@ -82,18 +95,34 @@ export default function CompleteInterviewForm({ interviewId }: { interviewId: st
           name="pointersForNextInterviewer"
           rows={2}
           required
-          className="w-full border rounded px-3 py-2 dark:bg-zinc-800 dark:border-zinc-700"
+          className="w-full border border-border rounded px-3 py-2 bg-background text-foreground placeholder:text-foreground-muted"
           placeholder="Any pointers for the next interviewer..."
         />
       </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
       <button
         type="submit"
         disabled={isPending}
-        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+        className="px-4 py-2 bg-primary text-white rounded hover:bg-primary-hover disabled:opacity-50"
       >
         {isPending ? "Submitting…" : "Mark completed & submit feedback"}
       </button>
     </form>
+      <ConfirmDialog
+        open={showConfirm}
+        title="Submit feedback"
+        message={
+          <>
+            You are about to submit your interview feedback. This will mark the interview as completed.
+            {pendingPayload?.result === "NO_HIRE" && " Submitting NO HIRE will also mark the candidate as rejected."}
+            {" "}Are you sure you want to continue?
+          </>
+        }
+        confirmLabel="Yes, submit feedback"
+        onConfirm={onConfirm}
+        onCancel={() => { setShowConfirm(false); setPendingPayload(null); }}
+        loading={isPending}
+      />
+    </>
   );
 }

@@ -1,40 +1,213 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import AssignInterviewersButton from "../AssignInterviewersButton";
-import CandidatesTableFilters from "./CandidatesTableFilters";
+import { revalidatePath } from "next/cache";
+import { Prisma } from "@prisma/client";
+import CandidatesPageClient from "./CandidatesPageClient";
 
-type StatusFilter = "in_pipeline" | "rejected" | "selected" | "all";
+export const dynamic = "force-dynamic";
+
+export type DisplayStatus =
+  | "in_pipeline"
+  | "rejected"
+  | "selected"
+  | "interview_scheduled"
+  | "interview_ongoing";
+
+export type StatusFilter = DisplayStatus | "all";
+
+function getDisplayStatus(
+  c: {
+    status: string;
+    interviews: { status: string }[];
+  }
+): DisplayStatus {
+  if (c.status === "rejected") return "rejected";
+  if (c.status === "selected") return "selected";
+  const hasOngoing = c.interviews.some((i) => i.status === "ongoing");
+  const hasScheduled = c.interviews.some((i) => i.status === "scheduled");
+  if (hasOngoing) return "interview_ongoing";
+  if (hasScheduled) return "interview_scheduled";
+  return "in_pipeline";
+}
+
+const VALID_STATUS_FILTERS: StatusFilter[] = [
+  "all",
+  "in_pipeline",
+  "interview_scheduled",
+  "interview_ongoing",
+  "rejected",
+  "selected",
+];
+
+async function updateCandidateDetails(candidateId: string, formData: FormData) {
+  "use server";
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id || session.user.role !== "admin") redirect("/login");
+  const name = (formData.get("name") as string)?.trim();
+  const email = (formData.get("email") as string)?.trim();
+  if (!name || !email) return;
+  const phone = (formData.get("phone") as string)?.trim() || null;
+  const college = (formData.get("college") as string)?.trim() || null;
+  const department = (formData.get("department") as string)?.trim() || null;
+  const resumeLink = (formData.get("resumeLink") as string)?.trim() || null;
+  const c = await prisma.candidate.findUnique({
+    where: { id: candidateId },
+    include: { campaign: { select: { id: true, status: true } } },
+  });
+  if (!c) return;
+  if (c.campaign.status === "completed") return;
+  await prisma.candidate.update({
+    where: { id: candidateId },
+    data: { name, email, phone, college, department, resumeLink },
+  });
+  revalidatePath(`/admin/campaigns/${c.campaignId}/candidates`);
+}
+
+async function updateCandidateStatus(candidateId: string, formData: FormData) {
+  "use server";
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id || session.user.role !== "admin") redirect("/login");
+  const status = formData.get("status") as string;
+  const role = (formData.get("role") as string)?.trim() || null;
+  if (!status || !["selected", "rejected", "in_pipeline"].includes(status)) return;
+  const c = await prisma.candidate.findUnique({
+    where: { id: candidateId },
+    include: { campaign: { select: { id: true, status: true } } },
+  });
+  if (!c) return;
+  if (c.campaign.status === "completed") return;
+  await prisma.candidate.update({
+    where: { id: candidateId },
+    data: { status: status as any, role },
+  });
+  revalidatePath(`/admin/campaigns/${c.campaignId}/candidates`);
+}
+
+async function assignInterviewer(candidateId: string, formData: FormData) {
+  "use server";
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id || session.user.role !== "admin") redirect("/login");
+  const interviewerId = formData.get("interviewerId") as string;
+  const scheduledAtRaw = formData.get("scheduledAt") as string;
+  const scheduledAt = scheduledAtRaw ? new Date(scheduledAtRaw) : new Date();
+  if (!interviewerId) return;
+  const candidate = await prisma.candidate.findUnique({
+    where: { id: candidateId },
+    include: { campaign: { select: { status: true, id: true } } },
+  });
+  if (!candidate) return;
+  if (candidate.campaign.status === "completed") return;
+
+  try {
+    await prisma.interview.create({
+      data: { candidateId, interviewerId, scheduledAt },
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      // Duplicate assignment, ignore
+      return;
+    }
+    throw error;
+  }
+  revalidatePath(`/admin/campaigns/${candidate.campaignId}/candidates`);
+}
+
+async function createCandidate(campaignId: string, formData: FormData) {
+  "use server";
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id || session.user.role !== "admin") redirect("/login");
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true } });
+  if (!campaign || campaign.status === "completed") return;
+  const name = (formData.get("name") as string)?.trim();
+  const email = (formData.get("email") as string)?.trim();
+  if (!name || !email) return;
+  const phone = (formData.get("phone") as string)?.trim() || null;
+  const college = (formData.get("college") as string)?.trim() || null;
+  const department = (formData.get("department") as string)?.trim() || null;
+  const resumeLink = (formData.get("resumeLink") as string)?.trim() || null;
+  try {
+    await prisma.candidate.create({
+      data: { campaignId, name, email, phone, college, department, resumeLink },
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      // Duplicate, ignore silently in modal context
+      return;
+    }
+    throw error;
+  }
+  revalidatePath(`/admin/campaigns/${campaignId}/candidates`);
+}
 
 export default async function CampaignCandidatesPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ search?: string; status?: string }>;
+  searchParams: Promise<{ search?: string; status?: string; view?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || session.user.role !== "admin") redirect("/login");
 
   const { id } = await params;
   const { search = "", status: statusParam } = await searchParams;
-  const statusFilter = (statusParam === "in_pipeline" || statusParam === "rejected" || statusParam === "selected"
-    ? statusParam
-    : "all") as StatusFilter;
+  const statusFilter: StatusFilter =
+    typeof statusParam === "string" && VALID_STATUS_FILTERS.includes(statusParam as StatusFilter)
+      ? (statusParam as StatusFilter)
+      : "all";
   const searchTrimmed = typeof search === "string" ? search.trim() : "";
 
-  const campaign = await prisma.campaign.findUnique({
-    where: { id },
-    include: {
-      candidates: { orderBy: { createdAt: "desc" } },
-    },
-  });
+  const [campaign, interviewers] = await Promise.all([
+    prisma.campaign.findUnique({
+      where: { id },
+      include: {
+        candidates: {
+          orderBy: { createdAt: "desc" },
+          include: {
+            interviews: {
+              select: {
+                id: true,
+                status: true,
+                interviewerId: true,
+                interviewer: { select: { name: true, email: true } },
+                feedback: { select: { result: true } },
+              },
+            },
+          },
+        },
+      },
+    }),
+    prisma.user.findMany({
+      where: { role: { in: ["interviewer", "admin"] } },
+      select: { id: true, name: true, email: true },
+    }),
+  ]);
+
   if (!campaign) notFound();
 
-  let candidates = campaign.candidates;
+  const allCandidates = campaign.candidates.map((c) => ({
+    id: c.id,
+    name: c.name,
+    email: c.email,
+    phone: c.phone,
+    college: c.college,
+    department: c.department,
+    resumeLink: c.resumeLink,
+    status: c.status,
+    interviews: c.interviews,
+    displayStatus: getDisplayStatus(c),
+  }));
+
+  let candidates = allCandidates;
   if (searchTrimmed) {
     const lower = searchTrimmed.toLowerCase();
     candidates = candidates.filter(
@@ -44,112 +217,24 @@ export default async function CampaignCandidatesPage({
     );
   }
   if (statusFilter !== "all") {
-    candidates = candidates.filter((c) => c.status === statusFilter);
+    candidates = candidates.filter((c) => c.displayStatus === statusFilter);
   }
 
   const isActive = campaign.status === "active";
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-xl font-bold">Candidates</h1>
-        {isActive && (
-          <div className="flex gap-2">
-            <Link
-              href={`/admin/campaigns/${id}/candidates/new`}
-              className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
-            >
-              Add candidate
-            </Link>
-            <Link
-              href={`/admin/campaigns/${id}/candidates/upload`}
-              className="px-3 py-1 border rounded text-sm hover:bg-gray-100 dark:hover:bg-zinc-800"
-            >
-              Upload CSV
-            </Link>
-          </div>
-        )}
-      </div>
-
-      <CandidatesTableFilters
-        campaignId={id}
-        search={searchTrimmed}
-        statusFilter={statusFilter}
-      />
-
-      {candidates.length === 0 ? (
-        <p className="text-gray-500 py-4">
-          {campaign.candidates.length === 0
-            ? "No candidates yet. Add one or upload a CSV."
-            : "No candidates match your search or filter."}
-        </p>
-      ) : (
-        <div className="border rounded overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-100 dark:bg-zinc-800">
-              <tr>
-                <th className="text-left p-2">Name</th>
-                <th className="text-left p-2">Email</th>
-                <th className="text-left p-2">Phone</th>
-                <th className="text-left p-2">College</th>
-                <th className="text-left p-2">Department</th>
-                <th className="text-left p-2">Resume</th>
-                <th className="text-left p-2">Status</th>
-                <th className="text-left p-2">Role</th>
-                {isActive && <th className="text-left p-2">Actions</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {candidates.map((c) => (
-                <tr key={c.id} className="border-t">
-                  <td className="p-2">
-                    <Link
-                      href={`/admin/candidates/${c.id}/details`}
-                      className="text-blue-600 hover:underline"
-                    >
-                      {c.name}
-                    </Link>
-                  </td>
-                  <td className="p-2">{c.email}</td>
-                  <td className="p-2">{c.phone ?? "—"}</td>
-                  <td className="p-2">{c.college ?? "—"}</td>
-                  <td className="p-2">{c.department ?? "—"}</td>
-                  <td className="p-2">
-                    {c.resumeLink ? (
-                      <a
-                        href={c.resumeLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline"
-                      >
-                        Link
-                      </a>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td className="p-2">{c.status}</td>
-                  <td className="p-2">{c.role ?? "—"}</td>
-                  {isActive && (
-                    <td className="p-2 flex gap-2">
-                      <AssignInterviewersButton
-                        candidateId={c.id}
-                        candidateName={c.name}
-                      />
-                      <Link
-                        href={`/admin/candidates/${c.id}/edit`}
-                        className="text-sm text-gray-600 hover:underline"
-                      >
-                        Edit status
-                      </Link>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+    <CandidatesPageClient
+      campaignId={id}
+      isActive={isActive}
+      candidates={candidates}
+      allCandidates={allCandidates}
+      interviewers={interviewers}
+      search={searchTrimmed}
+      statusFilter={statusFilter}
+      updateCandidateDetails={updateCandidateDetails}
+      updateCandidateStatus={updateCandidateStatus}
+      assignInterviewer={assignInterviewer}
+      createCandidate={createCandidate}
+    />
   );
 }

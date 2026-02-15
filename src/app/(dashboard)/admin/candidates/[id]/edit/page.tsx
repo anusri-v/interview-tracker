@@ -55,12 +55,12 @@ export default async function EditCandidatePage({
     <div className="max-w-md space-y-4">
       <Link
         href={`/admin/campaigns/${candidate.campaignId}/candidates`}
-        className="text-sm text-blue-600 hover:underline"
+        className="text-sm text-primary hover:underline"
       >
         ← Back to candidates
       </Link>
-      <h1 className="text-2xl font-bold">Edit status</h1>
-      <p className="text-sm text-gray-500">{candidate.name} — {candidate.email}</p>
+      <h1 className="text-4xl font-bold text-foreground tracking-tight">Edit Status</h1>
+      <p className="text-sm text-foreground-secondary">{candidate.name} — {candidate.email}</p>
       <UpdateCandidateForm candidate={candidate} updateCandidate={updateCandidate} />
     </div>
   );

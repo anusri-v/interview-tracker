@@ -1,115 +1,144 @@
 import { prisma } from "@/lib/db";
-import Link from "next/link";
+import { getDefaultCampaignId } from "@/lib/campaigns";
+import StatusBadge from "@/components/ui/StatusBadge";
 
-export default async function AdminDashboardPage() {
-  const [campaigns, candidateCounts, interviewCounts, selectedByRole] =
-    await Promise.all([
-      prisma.campaign.findMany({
-        orderBy: { createdAt: "desc" },
-        include: { _count: { select: { candidates: true } } },
-      }),
-      prisma.candidate.groupBy({
-        by: ["status"],
-        _count: true,
-      }),
-      prisma.interview.groupBy({
-        by: ["status"],
-        _count: true,
-      }),
-      prisma.candidate.findMany({
-        where: { status: "selected" },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-          campaign: { select: { name: true } },
-        },
-      }),
-    ]);
+type SearchParams = { campaignId?: string | string[] };
+
+export default async function AdminDashboardPage({
+  searchParams,
+}: {
+  searchParams?: SearchParams;
+}) {
+  const campaigns = await prisma.campaign.findMany({
+    orderBy: { createdAt: "desc" },
+    select: { id: true, name: true },
+  });
+
+  if (campaigns.length === 0) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-4xl font-bold text-foreground tracking-tight">Dashboard</h1>
+        <p className="text-sm text-foreground-muted">
+          No campaigns yet. Create a campaign to see dashboard data.
+        </p>
+      </div>
+    );
+  }
+
+  const queryCampaignId = Array.isArray(searchParams?.campaignId)
+    ? searchParams?.campaignId[0]
+    : searchParams?.campaignId;
+
+  const defaultCampaignId = await getDefaultCampaignId(prisma, { isAdmin: true });
+  const effectiveCampaignId =
+    queryCampaignId ?? defaultCampaignId ?? campaigns[0].id;
+  const selectedCampaign =
+    campaigns.find((c) => c.id === effectiveCampaignId) ?? campaigns[0];
+
+  const [candidateCounts, interviewCounts, selectedByRole] = await Promise.all([
+    prisma.candidate.groupBy({
+      by: ["status"],
+      where: { campaignId: selectedCampaign.id },
+      _count: true,
+    }),
+    prisma.interview.groupBy({
+      by: ["status"],
+      where: { candidate: { campaignId: selectedCampaign.id } },
+      _count: true,
+    }),
+    prisma.candidate.findMany({
+      where: { status: "selected", campaignId: selectedCampaign.id },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        role: true,
+      },
+    }),
+  ]);
 
   const totalCandidates = candidateCounts.reduce((s, c) => s + c._count, 0);
   const rejected = candidateCounts.find((c) => c.status === "rejected")?._count ?? 0;
-  const inPipeline = candidateCounts.find((c) => c.status === "in_pipeline")?._count ?? 0;
+  const inPipeline =
+    candidateCounts.find((c) => c.status === "in_pipeline")?._count ?? 0;
   const selected = candidateCounts.find((c) => c.status === "selected")?._count ?? 0;
 
-  const conducted = interviewCounts.find((c) => c.status === "completed")?._count ?? 0;
-  const ongoing = interviewCounts.find((c) => c.status === "ongoing")?._count ?? 0;
-  const scheduled = interviewCounts.find((c) => c.status === "scheduled")?._count ?? 0;
+  const conducted =
+    interviewCounts.find((c) => c.status === "completed")?._count ?? 0;
+  const ongoing =
+    interviewCounts.find((c) => c.status === "ongoing")?._count ?? 0;
+  const scheduled =
+    interviewCounts.find((c) => c.status === "scheduled")?._count ?? 0;
+
+  const stats = [
+    { label: "Total Candidates", value: totalCandidates },
+    { label: "Candidates in Pipeline", value: inPipeline },
+    { label: "Selected Candidates", value: selected },
+    { label: "Rejected Candidates", value: rejected },
+    { label: "Interviews Conducted", value: conducted },
+    { label: "Ongoing Interviews", value: ongoing },
+    { label: "Scheduled Interviews", value: scheduled },
+  ];
 
   return (
-    <div className="space-y-8">
-      <h1 className="text-2xl font-bold">Admin Dashboard</h1>
+    <div className="space-y-14">
+      <div>
+        <h1 className="text-4xl font-bold text-foreground tracking-tight">Dashboard</h1>
+        <p className="mt-1 text-sm text-foreground-muted">
+          Campaign: <span className="font-medium text-foreground">{selectedCampaign.name}</span>
+        </p>
+      </div>
 
-      <section>
-        <h2 className="text-lg font-semibold mb-2">Campaigns</h2>
-        <ul className="list-disc list-inside space-y-1">
-          {campaigns.length === 0 ? (
-            <li className="text-gray-500">No campaigns yet.</li>
-          ) : (
-            campaigns.map((c) => (
-              <li key={c.id}>
-                <Link href={`/admin/campaigns/${c.id}`} className="text-blue-600 hover:underline">
-                  {c.name}
-                </Link>{" "}
-                ({c._count.candidates} candidates)
-              </li>
-            ))
-          )}
-        </ul>
-        <Link
-          href="/admin/campaigns/new"
-          className="inline-block mt-2 px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
-        >
-          New campaign
-        </Link>
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+        {stats.map((stat) => (
+          <div
+            key={stat.label}
+            className="rounded-xl bg-card border border-border p-6"
+          >
+            <p className="text-[72px] leading-none font-bold tabular-nums text-foreground">
+              {stat.value}
+            </p>
+            <p className="mt-3 text-xs font-medium uppercase tracking-wider text-foreground-muted">
+              {stat.label}
+            </p>
+          </div>
+        ))}
       </section>
 
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="border rounded p-4">
-          <h2 className="text-lg font-semibold mb-2">Candidates (5.1)</h2>
-          <ul className="space-y-1 text-sm">
-            <li>Total: {totalCandidates}</li>
-            <li>Rejected: {rejected}</li>
-            <li>In pipeline: {inPipeline}</li>
-            <li>Selected: {selected}</li>
-          </ul>
-        </div>
-        <div className="border rounded p-4">
-          <h2 className="text-lg font-semibold mb-2">Interviews (5.2)</h2>
-          <ul className="space-y-1 text-sm">
-            <li>Conducted: {conducted}</li>
-            <li>Ongoing: {ongoing}</li>
-            <li>Scheduled: {scheduled}</li>
-          </ul>
-        </div>
-      </section>
-
-      <section>
-        <h2 className="text-lg font-semibold mb-2">Selected candidates and roles (5.3)</h2>
+      <section className="space-y-4">
+        <h2 className="text-xl font-bold text-foreground tracking-tight">Selected Candidates</h2>
         {selectedByRole.length === 0 ? (
-          <p className="text-gray-500 text-sm">None yet.</p>
+          <p className="text-sm text-foreground-muted py-6">None yet.</p>
         ) : (
-          <table className="w-full text-sm border-collapse border">
-            <thead>
-              <tr className="bg-gray-100 dark:bg-zinc-800">
-                <th className="border p-2 text-left">Name</th>
-                <th className="border p-2 text-left">Email</th>
-                <th className="border p-2 text-left">Campaign</th>
-                <th className="border p-2 text-left">Role</th>
-              </tr>
-            </thead>
-            <tbody>
-              {selectedByRole.map((c) => (
-                <tr key={c.id}>
-                  <td className="border p-2">{c.name}</td>
-                  <td className="border p-2">{c.email}</td>
-                  <td className="border p-2">{c.campaign?.name ?? "—"}</td>
-                  <td className="border p-2">{c.role ?? "—"}</td>
+          <div className="rounded-xl border border-border overflow-hidden bg-card">
+            <table className="w-full text-base border-collapse">
+              <thead>
+                <tr className="bg-surface">
+                  <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">Name</th>
+                  <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">Role</th>
+                  <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">Phone</th>
+                  <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">Email</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {selectedByRole.map((c) => (
+                  <tr key={c.id} className="border-b border-border last:border-0 hover:bg-surface/50 transition-colors">
+                    <td className="px-5 py-4 text-foreground font-medium">{c.name}</td>
+                    <td className="px-5 py-4">
+                      {c.role ? (
+                        <StatusBadge variant="selected" label={c.role} />
+                      ) : (
+                        <span className="text-foreground-muted">—</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-4 text-foreground-secondary">{c.phone ?? "—"}</td>
+                    <td className="px-5 py-4 text-foreground-secondary">{c.email}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>

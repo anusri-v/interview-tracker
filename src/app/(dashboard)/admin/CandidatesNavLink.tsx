@@ -18,7 +18,7 @@ export default function CandidatesNavLink({
   return (
     <Link
       href={href}
-      className="text-sm text-gray-600 dark:text-gray-400 hover:underline"
+      className="text-sm text-foreground-secondary hover:text-foreground hover:underline"
     >
       Candidates
     </Link>

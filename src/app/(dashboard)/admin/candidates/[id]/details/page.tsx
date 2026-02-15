@@ -51,11 +51,11 @@ export default async function CandidateDetailsPage({
     <div className="max-w-md space-y-4">
       <Link
         href={`/admin/campaigns/${candidate.campaignId}/candidates`}
-        className="text-sm text-blue-600 hover:underline"
+        className="text-sm text-primary hover:underline"
       >
         ← Back to candidates
       </Link>
-      <h1 className="text-2xl font-bold">Candidate details</h1>
+      <h1 className="text-4xl font-bold text-foreground tracking-tight">Candidate Details</h1>
       <UpdateCandidateDetailsForm
         candidate={candidate}
         updateCandidateDetails={updateCandidateDetails}

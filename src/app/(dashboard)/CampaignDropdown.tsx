@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 
 type Campaign = { id: string; name: string };
 
@@ -15,27 +15,60 @@ export default function CampaignDropdown({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const campaignPrefix = `/${basePath}/campaigns/`;
-  const currentId = pathname.startsWith(campaignPrefix)
+  const isMyInterviewsPage =
+    pathname === "/interviewer/interviews" || pathname.startsWith("/interviewer/interviews/");
+  const isAdminDashboardPage = basePath === "admin" && pathname === "/admin";
+  const isInterviewerDashboardPage = basePath === "interviewer" && pathname === "/interviewer";
+  const isCampaignSubpath = pathname.startsWith(campaignPrefix);
+
+  const currentIdFromPath = isCampaignSubpath
     ? pathname.slice(campaignPrefix.length).split("/")[0]
     : "";
-  const selectedId = currentId || defaultCampaignId || "";
+  const campaignIdFromQuery =
+    isMyInterviewsPage || isAdminDashboardPage || isInterviewerDashboardPage
+      ? searchParams.get("campaignId")
+      : null;
+  const selectedId =
+    isMyInterviewsPage || isAdminDashboardPage || isInterviewerDashboardPage
+      ? (campaignIdFromQuery ?? defaultCampaignId ?? "")
+      : (currentIdFromPath || defaultCampaignId || "");
 
   if (campaigns.length === 0) return null;
 
+  function handleChange(id: string) {
+    if (isMyInterviewsPage) {
+      const params = new URLSearchParams(searchParams.toString());
+      if (id) params.set("campaignId", id);
+      else params.delete("campaignId");
+      const q = params.toString();
+      router.push(`${pathname}${q ? `?${q}` : ""}`);
+    } else if (isAdminDashboardPage) {
+      router.push(id ? `/admin?campaignId=${id}` : "/admin");
+    } else if (isInterviewerDashboardPage) {
+      router.push(id ? `/interviewer?campaignId=${id}` : "/interviewer");
+    } else if (isCampaignSubpath && id) {
+      const afterPrefix = pathname.slice(campaignPrefix.length);
+      const segments = afterPrefix.split("/").filter(Boolean);
+      const rest = segments.slice(1).join("/");
+      const newPath = `/${basePath}/campaigns/${id}${rest ? `/${rest}` : ""}`;
+      router.push(newPath);
+    } else if (id) {
+      router.push(`/${basePath}/campaigns/${id}`);
+    }
+  }
+
   return (
     <div className="flex items-center gap-2">
-      <label htmlFor="campaign-select" className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
+      <label htmlFor="campaign-select" className="text-sm text-foreground-secondary whitespace-nowrap">
         Campaign:
       </label>
       <select
         id="campaign-select"
         value={selectedId}
-        onChange={(e) => {
-          const id = e.target.value;
-          if (id) router.push(`/${basePath}/campaigns/${id}`);
-        }}
-        className="text-sm border rounded px-2 py-1 dark:bg-zinc-800 dark:border-zinc-700 min-w-[160px]"
+        onChange={(e) => handleChange(e.target.value)}
+        className="text-sm border border-border rounded px-2 py-1 bg-card text-foreground min-w-[160px]"
       >
         <option value="">— Select —</option>
         {campaigns.map((c) => (

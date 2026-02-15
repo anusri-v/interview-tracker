@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
+import StatusBadge from "@/components/ui/StatusBadge";
 
 export default async function InterviewerCampaignCandidatesPage({
   params,
@@ -38,54 +39,63 @@ export default async function InterviewerCampaignCandidatesPage({
   if (!campaign) notFound();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-bold">{campaign.name}</h1>
-        <span
-          className={`px-2 py-0.5 rounded text-sm font-medium ${
-            campaign.status === "active"
-              ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
-              : "bg-gray-200 text-gray-700 dark:bg-zinc-700 dark:text-zinc-300"
-          }`}
-        >
-          {campaign.status === "active" ? "Active" : "Completed"}
+        <h1 className="text-4xl font-bold text-foreground tracking-tight">{campaign.name}</h1>
+        <span className="inline-flex items-center gap-2 text-sm">
+          <span
+            className={`w-2.5 h-2.5 rounded-full ${
+              campaign.status === "active" ? "bg-success" : "bg-foreground-muted"
+            }`}
+          />
+          <span className={campaign.status === "active" ? "text-success" : "text-foreground-secondary"}>
+            {campaign.status === "active" ? "Active" : "Completed"}
+          </span>
         </span>
       </div>
 
       <section>
-        <h2 className="text-lg font-semibold mb-2">Candidates ({campaign.candidates.length})</h2>
+        <h2 className="text-xl font-bold mb-4 text-foreground tracking-tight">Candidates ({campaign.candidates.length})</h2>
         {campaign.candidates.length === 0 ? (
-          <p className="text-gray-500">No candidates in this campaign.</p>
+          <p className="text-foreground-muted">No candidates in this campaign.</p>
         ) : (
-          <div className="border rounded overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-100 dark:bg-zinc-800">
+          <div className="border border-border rounded-xl overflow-hidden bg-card">
+            <table className="w-full text-base">
+              <thead className="bg-surface">
                 <tr>
-                  <th className="text-left p-2">Name</th>
-                  <th className="text-left p-2">Email</th>
-                  <th className="text-left p-2">Phone</th>
-                  <th className="text-left p-2">College</th>
-                  <th className="text-left p-2">Status</th>
-                  <th className="text-left p-2">Role</th>
-                  <th className="text-left p-2">Your interview</th>
+                  <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border">Name</th>
+                  <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border">Email</th>
+                  <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border">Phone</th>
+                  <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border">Status</th>
+                  <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border">Role</th>
+                  <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border">Your Interview</th>
                 </tr>
               </thead>
               <tbody>
                 {campaign.candidates.map((c) => {
                   const myInterview = c.interviews[0];
                   return (
-                    <tr key={c.id} className="border-t">
-                      <td className="p-2">{c.name}</td>
-                      <td className="p-2">{c.email}</td>
-                      <td className="p-2">{c.phone ?? "—"}</td>
-                      <td className="p-2">{c.college ?? "—"}</td>
-                      <td className="p-2">{c.status}</td>
-                      <td className="p-2">{c.role ?? "—"}</td>
-                      <td className="p-2">
+                    <tr key={c.id} className="border-b border-border last:border-0 hover:bg-surface/50 transition-colors">
+                      <td className="px-5 py-4 text-foreground font-medium">{c.name}</td>
+                      <td className="px-5 py-4 text-foreground-secondary">{c.email}</td>
+                      <td className="px-5 py-4 text-foreground-secondary">{c.phone ?? "—"}</td>
+                      <td className="px-5 py-4">
+                        <StatusBadge
+                          variant={
+                            c.status === "rejected"
+                              ? "rejected"
+                              : c.status === "selected"
+                                ? "selected"
+                                : "in_pipeline"
+                          }
+                        />
+                      </td>
+                      <td className="px-5 py-4 text-foreground-secondary">{c.role ?? "—"}</td>
+                      <td className="px-5 py-4">
                         {myInterview ? (
                           <Link
                             href={`/interviewer/interviews/${myInterview.id}`}
-                            className="text-blue-600 hover:underline"
+                            className="text-primary hover:text-primary-hover font-medium transition-colors"
                           >
                             {myInterview.status === "completed"
                               ? "View"
@@ -94,7 +104,7 @@ export default async function InterviewerCampaignCandidatesPage({
                                 : "Start"}
                           </Link>
                         ) : (
-                          "—"
+                          <span className="text-foreground-muted">—</span>
                         )}
                       </td>
                     </tr>

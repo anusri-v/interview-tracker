@@ -2,10 +2,13 @@
 
 import { useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 export default function CsvUploadForm({ campaignId }: { campaignId: string }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [pendingRows, setPendingRows] = useState<{ name: string; email: string; phone?: string; college?: string; department?: string; resumeLink?: string }[]>([]);
   const router = useRouter();
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -51,7 +54,14 @@ export default function CsvUploadForm({ campaignId }: { campaignId: string }) {
       setError("No valid rows found (need name and email).");
       return;
     }
+    setPendingRows(rows);
+    setShowConfirm(true);
+  }
 
+  function onConfirm() {
+    setShowConfirm(false);
+    const rows = pendingRows;
+    setPendingRows([]);
     startTransition(async () => {
       const res = await fetch(`/api/admin/campaigns/${campaignId}/candidates/upload`, {
         method: "POST",
@@ -69,27 +79,42 @@ export default function CsvUploadForm({ campaignId }: { campaignId: string }) {
   }
 
   return (
+    <>
     <form onSubmit={handleSubmit} className="space-y-3">
       <div>
-        <label htmlFor="file" className="block text-sm font-medium mb-1">CSV file</label>
+        <label htmlFor="file" className="block text-sm font-medium mb-1 text-foreground">CSV file</label>
         <input
           id="file"
           name="file"
           type="file"
           accept=".csv"
           required
-          className="w-full border rounded p-2 dark:bg-zinc-800 dark:border-zinc-700"
+          className="w-full border border-border rounded p-2 bg-card text-foreground file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-primary file:text-white file:text-sm file:font-medium file:hover:bg-primary-hover"
         />
       </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
       <button
         type="submit"
         disabled={isPending}
-        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+        className="px-4 py-2 bg-primary text-white rounded hover:bg-primary-hover disabled:opacity-50"
       >
         {isPending ? "Uploading…" : "Upload"}
       </button>
     </form>
+      <ConfirmDialog
+        open={showConfirm}
+        title="Upload candidates (CSV)"
+        message={
+          <>
+            You are about to upload <strong>{pendingRows.length}</strong> candidate{pendingRows.length !== 1 ? "s" : ""} to this campaign. This action cannot be undone for duplicate rows (they will be skipped). Continue?
+          </>
+        }
+        confirmLabel="Yes, upload"
+        onConfirm={onConfirm}
+        onCancel={() => { setShowConfirm(false); setPendingRows([]); }}
+        loading={isPending}
+      />
+    </>
   );
 }
 

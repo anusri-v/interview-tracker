@@ -1,7 +1,17 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
+import { appendFileSync, mkdirSync } from "fs";
+import { join } from "path";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+
+const DEBUG_LOG = join(process.cwd(), ".cursor", "debug.log");
+function debugLog(payload: Record<string, unknown>) {
+  try {
+    mkdirSync(join(process.cwd(), ".cursor"), { recursive: true });
+    appendFileSync(DEBUG_LOG, JSON.stringify(payload) + "\n");
+  } catch {}
+}
 
 export async function POST(
   request: Request,
@@ -37,17 +47,35 @@ export async function POST(
   if (!Array.isArray(body.candidates) || body.candidates.length === 0) {
     return NextResponse.json({ error: "candidates array required" }, { status: 400 });
   }
+  const total = body.candidates.length;
+  const mapped = body.candidates.map((c) => ({
+    campaignId,
+    name: String(c.name).trim(),
+    email: String(c.email).trim(),
+    phone: c.phone?.trim() || null,
+    college: c.college?.trim() || null,
+    department: c.department?.trim() || null,
+    resumeLink: c.resumeLink?.trim() || null,
+  }));
+  // #region agent log
+  const payloadEmails = [...new Set(mapped.map((r) => r.email))];
+  const payloadPhones = [...new Set(mapped.map((r) => r.phone).filter(Boolean))];
+  const existingByEmail = await prisma.candidate.count({ where: { campaignId, email: { in: payloadEmails } } });
+  const existingByPhone = payloadPhones.length
+    ? await prisma.candidate.count({ where: { campaignId, phone: { in: payloadPhones } } })
+    : 0;
+  const preLog = { location: "route.ts:upload", message: "upload pre createMany", data: { campaignId, total, mappedLen: mapped.length, uniqueEmails: payloadEmails.length, uniquePhones: payloadPhones.length, existingByEmail, existingByPhone, sampleEmail: payloadEmails[0] }, timestamp: Date.now(), hypothesisId: "H1-H5" };
+  debugLog(preLog);
+  fetch("http://127.0.0.1:7242/ingest/fdb5a47c-4919-4072-865c-1921ccac8d65", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(preLog) }).catch(() => {});
+  // #endregion
   const created = await prisma.candidate.createMany({
-    data: body.candidates.map((c) => ({
-      campaignId,
-      name: String(c.name).trim(),
-      email: String(c.email).trim(),
-      phone: c.phone?.trim() || null,
-      college: c.college?.trim() || null,
-      department: c.department?.trim() || null,
-      resumeLink: c.resumeLink?.trim() || null,
-    })),
+    data: mapped,
     skipDuplicates: true,
   });
-  return NextResponse.json({ created: created.count });
+  // #region agent log
+  const postLog = { location: "route.ts:upload", message: "upload post createMany", data: { createdCount: created.count, total, skipped: total - created.count }, timestamp: Date.now(), hypothesisId: "H1-H5" };
+  debugLog(postLog);
+  fetch("http://127.0.0.1:7242/ingest/fdb5a47c-4919-4072-865c-1921ccac8d65", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(postLog) }).catch(() => {});
+  // #endregion
+  return NextResponse.json({ created: created.count, total, skipped: total - created.count });
 }

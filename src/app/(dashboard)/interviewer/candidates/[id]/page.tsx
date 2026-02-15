@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
+import StatusBadge from "@/components/ui/StatusBadge";
 
 export default async function InterviewerCandidateDetailPage({
   params,
@@ -38,47 +39,49 @@ export default async function InterviewerCandidateDetailPage({
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      <Link href="/interviewer/interviews" className="text-sm text-blue-600 hover:underline">
+    <div className="space-y-8 max-w-2xl">
+      <Link href="/interviewer/interviews" className="text-sm text-primary hover:text-primary-hover transition-colors">
         ← My interviews
       </Link>
 
-      <div className="border rounded p-4">
-        <h1 className="text-xl font-bold">{candidate.name}</h1>
-        <p className="text-sm text-gray-500">{candidate.email}</p>
-        {candidate.phone && <p className="text-sm">Phone: {candidate.phone}</p>}
-        {candidate.college && <p className="text-sm">College: {candidate.college}</p>}
-        {candidate.department && <p className="text-sm">Department: {candidate.department}</p>}
-        {candidate.resumeLink && (
-          <p className="text-sm">
-            Resume:{" "}
-            <a href={candidate.resumeLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-              Open link
-            </a>
-          </p>
-        )}
-        <p className="text-sm">Campaign: {candidate.campaign?.name}</p>
-        <p className="text-sm">Status: {candidate.status}</p>
-        {candidate.role && <p className="text-sm">Role: {candidate.role}</p>}
+      <div className="border border-border rounded-xl bg-card p-6 text-foreground">
+        <h1 className="text-4xl font-bold tracking-tight">{candidate.name}</h1>
+        <div className="mt-3 space-y-1">
+          <p className="text-sm text-foreground-secondary">{candidate.email}</p>
+          {candidate.phone && <p className="text-sm text-foreground-secondary">Phone: {candidate.phone}</p>}
+          {candidate.college && <p className="text-sm text-foreground-secondary">College: {candidate.college}</p>}
+          {candidate.department && <p className="text-sm text-foreground-secondary">Department: {candidate.department}</p>}
+          {candidate.resumeLink && (
+            <p className="text-sm">
+              Resume:{" "}
+              <a href={candidate.resumeLink} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary-hover transition-colors">
+                Open link
+              </a>
+            </p>
+          )}
+          <p className="text-sm text-foreground-secondary">Campaign: {candidate.campaign?.name}</p>
+          <p className="text-sm text-foreground-secondary">Status: {candidate.status}</p>
+          {candidate.role && <p className="text-sm text-foreground-secondary">Role: {candidate.role}</p>}
+        </div>
       </div>
 
       <section>
-        <h2 className="text-lg font-semibold mb-2">Past interview feedbacks</h2>
+        <h2 className="text-xl font-bold mb-3 text-foreground tracking-tight">Past Interview Feedbacks</h2>
         {candidate.interviews.length === 0 ? (
-          <p className="text-gray-500 text-sm">No completed interviews yet.</p>
+          <p className="text-foreground-muted text-sm">No completed interviews yet.</p>
         ) : (
           <ul className="space-y-3">
             {candidate.interviews.map((i) => (
-              <li key={i.id} className="border rounded p-3 text-sm">
+              <li key={i.id} className="border border-border rounded-xl bg-card p-4 text-sm text-foreground">
                 <p className="font-medium">{i.interviewer.name ?? i.interviewer.email}</p>
                 {i.feedback && (
                   <>
-                    <p className="mt-1">
+                    <p className="mt-2">
                       <span className="font-medium">Result: </span>
-                      <span className="text-gray-700 dark:text-gray-300">{i.feedback.result.replace("_", " ")}</span>
+                      <StatusBadge variant={i.feedback.result as any} />
                     </p>
-                    <p className="mt-1 text-gray-600 dark:text-gray-400">{i.feedback.feedback}</p>
-                    <p className="mt-1 text-gray-500">Pointers: {i.feedback.pointersForNextInterviewer}</p>
+                    <p className="mt-2 text-foreground-secondary">{i.feedback.feedback}</p>
+                    <p className="mt-1 text-foreground-muted">Pointers: {i.feedback.pointersForNextInterviewer}</p>
                   </>
                 )}
               </li>

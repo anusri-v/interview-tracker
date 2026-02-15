@@ -75,6 +75,7 @@ model Candidate {
   interviews  Interview[]
 
   @@unique([campaignId, email])
+  @@unique([campaignId, phone])
   @@index([campaignId, status])
 }
 

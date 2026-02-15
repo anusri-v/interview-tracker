@@ -20,17 +20,17 @@ export default async function UploadCandidatesPage({
 
   return (
     <div className="max-w-lg space-y-4">
-      <Link href={`/admin/campaigns/${campaignId}`} className="text-sm text-blue-600 hover:underline">
+      <Link href={`/admin/campaigns/${campaignId}`} className="text-sm text-primary hover:underline">
         ← Back to {campaign.name}
       </Link>
-      <h1 className="text-2xl font-bold">Upload candidates (CSV)</h1>
-      <p className="text-sm text-gray-500">
-        Required: <code className="bg-gray-100 dark:bg-zinc-800 px-1">name</code>,{" "}
-        <code className="bg-gray-100 dark:bg-zinc-800 px-1">email</code>. Optional:{" "}
-        <code className="bg-gray-100 dark:bg-zinc-800 px-1">phone</code>,{" "}
-        <code className="bg-gray-100 dark:bg-zinc-800 px-1">college</code>,{" "}
-        <code className="bg-gray-100 dark:bg-zinc-800 px-1">department</code>,{" "}
-        <code className="bg-gray-100 dark:bg-zinc-800 px-1">resume_link</code>. One candidate per row.
+      <h1 className="text-4xl font-bold text-foreground tracking-tight">Upload Candidates (CSV)</h1>
+      <p className="text-sm text-foreground-secondary">
+        Required: <code className="bg-card px-1.5 py-0.5 rounded text-foreground">name</code>,{" "}
+        <code className="bg-card px-1.5 py-0.5 rounded text-foreground">email</code>. Optional:{" "}
+        <code className="bg-card px-1.5 py-0.5 rounded text-foreground">phone</code>,{" "}
+        <code className="bg-card px-1.5 py-0.5 rounded text-foreground">college</code>,{" "}
+        <code className="bg-card px-1.5 py-0.5 rounded text-foreground">department</code>,{" "}
+        <code className="bg-card px-1.5 py-0.5 rounded text-foreground">resume_link</code>. One candidate per row.
       </p>
       <CsvUploadForm campaignId={campaignId} />
     </div>

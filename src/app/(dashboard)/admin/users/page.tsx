@@ -14,33 +14,35 @@ export default async function ManageAdminsPage() {
   });
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Manage admins</h1>
-      <p className="text-sm text-gray-500">
-        Users who have signed in with Google. Promote interviewers to admin.
-      </p>
-      <div className="border rounded overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-100 dark:bg-zinc-800">
-            <tr>
-              <th className="text-left p-2">Name</th>
-              <th className="text-left p-2">Email</th>
-              <th className="text-left p-2">Role</th>
-              <th className="text-left p-2">Action</th>
+    <div className="space-y-8">
+      <h1 className="text-4xl font-bold text-foreground tracking-tight">Manage Admins</h1>
+      <div className="rounded-xl border border-border overflow-hidden bg-card">
+        <table className="w-full text-base border-collapse">
+          <thead>
+            <tr className="bg-surface">
+              <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">User</th>
+              <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">Email</th>
+              <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">Role</th>
+              <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">Actions</th>
             </tr>
           </thead>
           <tbody>
             {users.map((u) => (
-              <tr key={u.id} className="border-t">
-                <td className="p-2">{u.name ?? "—"}</td>
-                <td className="p-2">{u.email}</td>
-                <td className="p-2">{u.role}</td>
-                <td className="p-2">
+              <tr key={u.id} className="border-b border-border last:border-0 hover:bg-surface/50 transition-colors">
+                <td className="px-5 py-4 font-medium text-foreground">{u.name ?? "—"}</td>
+                <td className="px-5 py-4 text-foreground-secondary">{u.email}</td>
+                <td className="px-5 py-4">
+                  <span className="capitalize text-foreground-secondary">{u.role}</span>
+                </td>
+                <td className="px-5 py-4">
                   {u.role === "interviewer" && (
-                    <PromoteAdminButton userId={u.id} />
+                    <PromoteAdminButton
+                      userId={u.id}
+                      userDisplay={u.name || u.email}
+                    />
                   )}
                   {u.role === "admin" && (
-                    <span className="text-gray-500">Admin</span>
+                    <span className="text-foreground-muted text-sm">Admin</span>
                   )}
                 </td>
               </tr>

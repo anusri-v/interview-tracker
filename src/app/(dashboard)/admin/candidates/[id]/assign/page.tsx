@@ -23,6 +23,18 @@ async function assignInterviewers(
   });
   if (!candidate) redirect("/admin");
   if (candidate.campaign.status === "completed") redirect(`/admin/campaigns/${candidate.campaignId}`);
+
+  const hasActiveInterview = await prisma.interview.findFirst({
+    where: {
+      candidateId,
+      status: { in: ["scheduled", "ongoing"] },
+    },
+    select: { id: true },
+  });
+  if (hasActiveInterview) {
+    redirect(`/admin/candidates/${candidateId}/assign?error=has_active_interview`);
+  }
+
   await prisma.interview.createMany({
     data: interviewerIds.map((interviewerId) => ({
       candidateId,
@@ -36,8 +48,10 @@ async function assignInterviewers(
 
 export default async function AssignInterviewersPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: { error?: string };
 }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || session.user.role !== "admin") redirect("/login");
@@ -63,16 +77,22 @@ export default async function AssignInterviewersPage({
     })
     .then((rows) => rows.map((r) => r.interviewerId));
 
+  const errorParam = searchParams?.error;
+  const errorMessage =
+    errorParam === "has_active_interview"
+      ? "This candidate already has an interview scheduled / ongoing."
+      : undefined;
+
   return (
     <div className="max-w-md space-y-4">
       <Link
         href={`/admin/campaigns/${candidate.campaignId}/candidates`}
-        className="text-sm text-blue-600 hover:underline"
+        className="text-sm text-primary hover:underline"
       >
         ← Back to candidates
       </Link>
-      <h1 className="text-2xl font-bold">Assign interview</h1>
-      <p className="text-sm text-gray-500">
+      <h1 className="text-4xl font-bold text-foreground tracking-tight">Assign Interview</h1>
+      <p className="text-sm text-foreground-secondary">
         Candidate: {candidate.name} ({candidate.email})
       </p>
       <AssignInterviewersForm
@@ -80,6 +100,7 @@ export default async function AssignInterviewersPage({
         interviewers={interviewers}
         existingInterviewerIds={existingInterviewerIds}
         assignInterviewers={assignInterviewers}
+        error={errorMessage}
       />
     </div>
   );

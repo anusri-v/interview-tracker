@@ -46,6 +46,9 @@ export default function HireCandidateModal({
             <option value="GEN AI">GEN AI</option>
             <option value="QA">QA</option>
             <option value="DevOps">DevOps</option>
+            <option value="Data Scientist">Data Scientist</option>
+            <option value="Data Engineer">Data Engineer</option>
+            <option value="L1">L1</option>
             <option value="Other">Other</option>
           </select>
         </div>

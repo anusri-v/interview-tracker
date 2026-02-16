@@ -9,6 +9,9 @@ const ROLE_OPTIONS = [
   { value: "GEN AI", label: "GEN AI" },
   { value: "QA", label: "QA" },
   { value: "DevOps", label: "DevOps" },
+  { value: "Data Scientist", label: "Data Scientist" },
+  { value: "Data Engineer", label: "Data Engineer" },
+  { value: "L1", label: "L1" },
   { value: "Other", label: "Other" },
 ] as const;
 

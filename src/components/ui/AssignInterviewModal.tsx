@@ -4,7 +4,7 @@ import { useState, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Modal from "./Modal";
 
-type Interviewer = { id: string; name: string | null; email: string };
+type Interviewer = { id: string; name: string | null; email: string; hasOngoing?: boolean; hasScheduled?: boolean };
 
 export default function AssignInterviewModal({
   open,
@@ -16,6 +16,8 @@ export default function AssignInterviewModal({
   existingInterviewerIds,
   completedInterviewerIds = [],
   assignInterviewer,
+  campaignType,
+  interviewerSlots = [],
 }: {
   open: boolean;
   onClose: () => void;
@@ -26,6 +28,8 @@ export default function AssignInterviewModal({
   existingInterviewerIds: string[];
   completedInterviewerIds?: string[];
   assignInterviewer: (candidateId: string, formData: FormData) => Promise<void>;
+  campaignType?: string;
+  interviewerSlots?: { id: string; interviewerId: string; startTime: string }[];
 }) {
   const [isPending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
@@ -50,6 +54,26 @@ export default function AssignInterviewModal({
       u.email.toLowerCase().includes(q)
     );
   });
+
+  // Slot counts per interviewer
+  const slotCountMap: Record<string, number> = {};
+  for (const s of interviewerSlots) {
+    slotCountMap[s.interviewerId] = (slotCountMap[s.interviewerId] || 0) + 1;
+  }
+
+  // Slots for selected interviewer
+  const selectedSlots = interviewerSlots
+    .filter((s) => s.interviewerId === selectedId)
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+
+  function formatSlotChip(iso: string) {
+    const d = new Date(iso);
+    const date = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const h = d.getHours();
+    const hr = h === 0 || h === 12 ? 12 : h > 12 ? h - 12 : h;
+    const ampm = h >= 12 ? "PM" : "AM";
+    return `${date}, ${hr} ${ampm}`;
+  }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -85,7 +109,7 @@ export default function AssignInterviewModal({
             onChange={(e) => setSearch(e.target.value)}
             className="w-full border border-border rounded px-3 py-2 bg-card text-foreground mb-2 text-sm"
           />
-          <div className="max-h-48 overflow-y-auto border border-border rounded bg-card">
+          <div className="max-h-60 overflow-y-auto border border-border rounded bg-card">
             {filteredInterviewers.length === 0 ? (
               <p className="text-xs text-foreground-muted p-3">
                 No interviewers found.
@@ -106,9 +130,9 @@ export default function AssignInterviewModal({
                       value={u.id}
                       checked={selectedId === u.id}
                       onChange={() => setSelectedId(u.id)}
-                      className="accent-primary"
+                      className="accent-primary flex-shrink-0"
                     />
-                    <span className="text-sm text-foreground">
+                    <span className="text-sm text-foreground truncate">
                       {u.name || u.email}
                       {u.name && (
                         <span className="text-foreground-muted ml-1">
@@ -116,17 +140,69 @@ export default function AssignInterviewModal({
                         </span>
                       )}
                     </span>
-                    {alreadyInterviewed && (
-                      <span className="ml-auto text-xs bg-[#FFDDA4] text-[#D97706] border border-[#F59E0B] rounded-full px-2 py-0.5 font-medium whitespace-nowrap">
-                        already interviewed
-                      </span>
-                    )}
+                    <span className="ml-auto flex items-center gap-1.5 flex-shrink-0">
+                      {campaignType === "experienced" && slotCountMap[u.id] > 0 && (
+                        <span className="text-xs bg-green-100 text-green-700 border border-green-300 rounded-full px-2 py-0.5 font-medium whitespace-nowrap">
+                          {slotCountMap[u.id]} slot{slotCountMap[u.id] !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                      {alreadyInterviewed && (
+                        <span className="text-xs bg-[#FFDDA4] text-[#D97706] border border-[#F59E0B] rounded-full px-2 py-0.5 font-medium whitespace-nowrap">
+                          already interviewed
+                        </span>
+                      )}
+                      {campaignType !== "experienced" && u.hasOngoing && (
+                        <span className="text-xs bg-blue-100 text-blue-700 border border-blue-300 rounded-full px-2 py-0.5 font-medium whitespace-nowrap">
+                          interview ongoing
+                        </span>
+                      )}
+                      {campaignType !== "experienced" && u.hasScheduled && !u.hasOngoing && (
+                        <span className="text-xs bg-purple-100 text-purple-700 border border-purple-300 rounded-full px-2 py-0.5 font-medium whitespace-nowrap">
+                          interview scheduled
+                        </span>
+                      )}
+                    </span>
                   </label>
                 );
               })
             )}
           </div>
         </div>
+        {campaignType === "experienced" && selectedId && selectedSlots.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium mb-1 text-foreground">
+              Available Slots
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {selectedSlots.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => {
+                    const d = new Date(s.startTime);
+                    const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+                      .toISOString()
+                      .slice(0, 16);
+                    const input = formRef.current?.querySelector<HTMLInputElement>(
+                      'input[name="scheduledAt"]'
+                    );
+                    if (input) {
+                      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+                        window.HTMLInputElement.prototype,
+                        "value"
+                      )?.set;
+                      nativeInputValueSetter?.call(input, local);
+                      input.dispatchEvent(new Event("input", { bubbles: true }));
+                    }
+                  }}
+                  className="px-3 py-1.5 text-xs font-medium bg-surface border border-border rounded-lg hover:bg-primary hover:text-white hover:border-primary transition-colors"
+                >
+                  {formatSlotChip(s.startTime)}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div>
           <label
             htmlFor="assign-scheduledAt"

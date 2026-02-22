@@ -4,33 +4,80 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
-import StatusBadge from "@/components/ui/StatusBadge";
+import CandidatesPageClient from "@/app/(dashboard)/admin/campaigns/[id]/candidates/CandidatesPageClient";
+
+export const dynamic = "force-dynamic";
+
+type DisplayStatus =
+  | "in_pipeline"
+  | "rejected"
+  | "selected"
+  | "interview_scheduled"
+  | "interview_ongoing"
+  | "no_show";
+
+function getDisplayStatus(c: {
+  status: string;
+  interviews: { status: string }[];
+}): DisplayStatus {
+  if (c.status === "rejected") return "rejected";
+  if (c.status === "selected") return "selected";
+  if (c.status === "no_show") return "no_show";
+  const hasOngoing = c.interviews.some((i) => i.status === "ongoing");
+  const hasScheduled = c.interviews.some((i) => i.status === "scheduled");
+  if (hasOngoing) return "interview_ongoing";
+  if (hasScheduled) return "interview_scheduled";
+  return "in_pipeline";
+}
+
+type StatusFilter = DisplayStatus | "all";
+
+const VALID_STATUS_FILTERS: StatusFilter[] = [
+  "all",
+  "in_pipeline",
+  "interview_scheduled",
+  "interview_ongoing",
+  "rejected",
+  "selected",
+  "no_show",
+];
+
+// No-op server actions (read-only for interviewers)
+async function noop() {
+  "use server";
+}
 
 export default async function InterviewerCampaignCandidatesPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ search?: string; status?: string; page?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/login");
 
   const { id } = await params;
+  const { search = "", status: statusParam, page: pageParam } = await searchParams;
+  const statusFilter: StatusFilter =
+    typeof statusParam === "string" && VALID_STATUS_FILTERS.includes(statusParam as StatusFilter)
+      ? (statusParam as StatusFilter)
+      : "all";
+  const searchTrimmed = typeof search === "string" ? search.trim() : "";
+
   const campaign = await prisma.campaign.findUnique({
-    where: {
-      id,
-      candidates: {
-        some: {
-          interviews: { some: { interviewerId: session.user.id } },
-        },
-      },
-    },
+    where: { id },
     include: {
       candidates: {
         orderBy: { createdAt: "desc" },
         include: {
           interviews: {
-            where: { interviewerId: session.user.id! },
-            select: { id: true, status: true },
+            select: {
+              id: true,
+              status: true,
+              interviewerId: true,
+              feedback: { select: { result: true } },
+            },
           },
         },
       },
@@ -38,83 +85,73 @@ export default async function InterviewerCampaignCandidatesPage({
   });
   if (!campaign) notFound();
 
-  return (
-    <div className="space-y-8">
-      <div className="flex items-center gap-3">
-        <h1 className="text-4xl font-bold text-foreground tracking-tight">{campaign.name}</h1>
-        <span className="inline-flex items-center gap-2 text-sm">
-          <span
-            className={`w-2.5 h-2.5 rounded-full ${
-              campaign.status === "active" ? "bg-success" : "bg-foreground-muted"
-            }`}
-          />
-          <span className={campaign.status === "active" ? "text-success" : "text-foreground-secondary"}>
-            {campaign.status === "active" ? "Active" : "Completed"}
-          </span>
-        </span>
-      </div>
+  const allCandidates = campaign.candidates.map((c) => ({
+    id: c.id,
+    name: c.name,
+    email: c.email,
+    phone: c.phone,
+    college: c.college,
+    department: c.department,
+    resumeLink: c.resumeLink,
+    currentRole: c.currentRole,
+    hiredRole: c.hiredRole,
+    status: c.status,
+    interviews: c.interviews,
+    displayStatus: getDisplayStatus(c),
+  }));
 
-      <section>
-        <h2 className="text-xl font-bold mb-4 text-foreground tracking-tight">Candidates ({campaign.candidates.length})</h2>
-        {campaign.candidates.length === 0 ? (
-          <p className="text-foreground-muted">No candidates in this campaign.</p>
-        ) : (
-          <div className="border border-border rounded-xl overflow-hidden bg-card">
-            <table className="w-full text-base">
-              <thead className="bg-surface">
-                <tr>
-                  <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border">Name</th>
-                  <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border">Email</th>
-                  <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border">Phone</th>
-                  <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border">Status</th>
-                  <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border">Role</th>
-                  <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border">Your Interview</th>
-                </tr>
-              </thead>
-              <tbody>
-                {campaign.candidates.map((c) => {
-                  const myInterview = c.interviews[0];
-                  return (
-                    <tr key={c.id} className="border-b border-border last:border-0 hover:bg-surface/50 transition-colors">
-                      <td className="px-5 py-4 text-foreground font-medium">{c.name}</td>
-                      <td className="px-5 py-4 text-foreground-secondary">{c.email}</td>
-                      <td className="px-5 py-4 text-foreground-secondary">{c.phone ?? "—"}</td>
-                      <td className="px-5 py-4">
-                        <StatusBadge
-                          variant={
-                            c.status === "rejected"
-                              ? "rejected"
-                              : c.status === "selected"
-                                ? "selected"
-                                : "in_pipeline"
-                          }
-                        />
-                      </td>
-                      <td className="px-5 py-4 text-foreground-secondary">{c.role ?? "—"}</td>
-                      <td className="px-5 py-4">
-                        {myInterview ? (
-                          <Link
-                            href={`/interviewer/interviews/${myInterview.id}`}
-                            className="text-primary hover:text-primary-hover font-medium transition-colors"
-                          >
-                            {myInterview.status === "completed"
-                              ? "View"
-                              : myInterview.status === "ongoing"
-                                ? "Continue"
-                                : "Start"}
-                          </Link>
-                        ) : (
-                          <span className="text-foreground-muted">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+  let candidates = allCandidates;
+  if (searchTrimmed) {
+    const lower = searchTrimmed.toLowerCase();
+    candidates = candidates.filter(
+      (c) =>
+        c.name.toLowerCase().includes(lower) ||
+        c.email.toLowerCase().includes(lower)
+    );
+  }
+  if (statusFilter !== "all") {
+    candidates = candidates.filter((c) => c.displayStatus === statusFilter);
+  }
+
+  const PAGE_SIZE = 20;
+  const totalFiltered = candidates.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / PAGE_SIZE));
+  const currentPage = Math.max(1, Math.min(totalPages, parseInt(pageParam || "1", 10) || 1));
+  const paginatedCandidates = candidates.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  return (
+    <div className="space-y-4">
+      {campaign.type === "experienced" && campaign.status === "active" && (
+        <div className="flex justify-end">
+          <Link
+            href={`/interviewer/campaigns/${id}/availability`}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+            </svg>
+            Manage Availability
+          </Link>
+        </div>
+      )}
+      <CandidatesPageClient
+        campaignId={id}
+        campaignType={campaign.type}
+        isActive={campaign.status === "active"}
+        readOnly
+        candidates={paginatedCandidates}
+        allCandidates={allCandidates}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        totalFiltered={totalFiltered}
+        interviewers={[]}
+        search={searchTrimmed}
+        statusFilter={statusFilter}
+        updateCandidateDetails={noop}
+        updateCandidateStatus={noop}
+        assignInterviewer={noop}
+        createCandidate={noop}
+      />
     </div>
   );
 }

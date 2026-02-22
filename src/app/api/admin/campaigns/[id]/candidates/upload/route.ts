@@ -1,17 +1,21 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
-import { appendFileSync, mkdirSync } from "fs";
-import { join } from "path";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { Prisma } from "@prisma/client";
 
-const DEBUG_LOG = join(process.cwd(), ".cursor", "debug.log");
-function debugLog(payload: Record<string, unknown>) {
-  try {
-    mkdirSync(join(process.cwd(), ".cursor"), { recursive: true });
-    appendFileSync(DEBUG_LOG, JSON.stringify(payload) + "\n");
-  } catch {}
-}
+type CandidateRow = {
+  name: string;
+  email: string;
+  phone?: string;
+  college?: string;
+  department?: string;
+  resumeLink?: string;
+  currentRole?: string;
+  rounds?: { interviewerEmail: string; result: string }[];
+};
+
+const VALID_RESULTS = ["HIRE", "NO_HIRE", "WEAK_HIRE", "NO_SHOW"];
 
 export async function POST(
   request: Request,
@@ -29,16 +33,8 @@ export async function POST(
   if (campaign.status === "completed") {
     return NextResponse.json({ error: "Campaign is completed; cannot add candidates" }, { status: 400 });
   }
-  let body: {
-    candidates: {
-      name: string;
-      email: string;
-      phone?: string;
-      college?: string;
-      department?: string;
-      resumeLink?: string;
-    }[];
-  };
+
+  let body: { candidates: CandidateRow[] };
   try {
     body = await request.json();
   } catch {
@@ -47,6 +43,7 @@ export async function POST(
   if (!Array.isArray(body.candidates) || body.candidates.length === 0) {
     return NextResponse.json({ error: "candidates array required" }, { status: 400 });
   }
+
   const total = body.candidates.length;
   const mapped = body.candidates.map((c) => ({
     campaignId,
@@ -56,26 +53,125 @@ export async function POST(
     college: c.college?.trim() || null,
     department: c.department?.trim() || null,
     resumeLink: c.resumeLink?.trim() || null,
+    currentRole: campaign.type === "fresher" ? "Fresher" : (c.currentRole?.trim() || null),
   }));
-  // #region agent log
-  const payloadEmails = [...new Set(mapped.map((r) => r.email))];
-  const payloadPhones = [...new Set(mapped.map((r) => r.phone).filter(Boolean))];
-  const existingByEmail = await prisma.candidate.count({ where: { campaignId, email: { in: payloadEmails } } });
-  const existingByPhone = payloadPhones.length
-    ? await prisma.candidate.count({ where: { campaignId, phone: { in: payloadPhones } } })
-    : 0;
-  const preLog = { location: "route.ts:upload", message: "upload pre createMany", data: { campaignId, total, mappedLen: mapped.length, uniqueEmails: payloadEmails.length, uniquePhones: payloadPhones.length, existingByEmail, existingByPhone, sampleEmail: payloadEmails[0] }, timestamp: Date.now(), hypothesisId: "H1-H5" };
-  debugLog(preLog);
-  fetch("http://127.0.0.1:7242/ingest/fdb5a47c-4919-4072-865c-1921ccac8d65", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(preLog) }).catch(() => {});
-  // #endregion
+
   const created = await prisma.candidate.createMany({
     data: mapped,
     skipDuplicates: true,
   });
-  // #region agent log
-  const postLog = { location: "route.ts:upload", message: "upload post createMany", data: { createdCount: created.count, total, skipped: total - created.count }, timestamp: Date.now(), hypothesisId: "H1-H5" };
-  debugLog(postLog);
-  fetch("http://127.0.0.1:7242/ingest/fdb5a47c-4919-4072-865c-1921ccac8d65", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(postLog) }).catch(() => {});
-  // #endregion
-  return NextResponse.json({ created: created.count, total, skipped: total - created.count });
+
+  // Check if any candidates have interview history
+  const candidatesWithRounds = body.candidates.filter(
+    (c) => c.rounds && c.rounds.length > 0
+  );
+
+  let interviewsCreated = 0;
+  const warnings: string[] = [];
+
+  if (candidatesWithRounds.length > 0) {
+    // Fetch all created/existing candidates by email to get IDs
+    const emails = [...new Set(body.candidates.map((c) => String(c.email).trim()))];
+    const dbCandidates = await prisma.candidate.findMany({
+      where: { campaignId, email: { in: emails } },
+      select: { id: true, email: true },
+    });
+    const candidateByEmail: Record<string, string> = {};
+    for (const c of dbCandidates) {
+      candidateByEmail[c.email.toLowerCase()] = c.id;
+    }
+
+    // Collect all unique interviewer emails, look up in User table
+    const interviewerEmails = [
+      ...new Set(
+        candidatesWithRounds.flatMap(
+          (c) => c.rounds!.map((r) => r.interviewerEmail.trim().toLowerCase())
+        )
+      ),
+    ];
+    const dbUsers = await prisma.user.findMany({
+      where: { email: { in: interviewerEmails } },
+      select: { id: true, email: true },
+    });
+    const userByEmail: Record<string, string> = {};
+    for (const u of dbUsers) {
+      userByEmail[u.email.toLowerCase()] = u.id;
+    }
+
+    // Process each candidate with rounds
+    for (const c of candidatesWithRounds) {
+      const candidateEmail = String(c.email).trim().toLowerCase();
+      const candidateId = candidateByEmail[candidateEmail];
+      if (!candidateId) continue;
+
+      let lastResult: string | null = null;
+
+      for (const round of c.rounds!) {
+        const interviewerEmail = round.interviewerEmail.trim().toLowerCase();
+        const interviewerId = userByEmail[interviewerEmail];
+        if (!interviewerId) {
+          warnings.push(`Interviewer "${round.interviewerEmail}" not found — skipped for ${c.email}`);
+          continue;
+        }
+
+        const result = round.result.trim().toUpperCase();
+        if (!VALID_RESULTS.includes(result)) {
+          warnings.push(`Invalid result "${round.result}" — skipped for ${c.email}`);
+          continue;
+        }
+
+        try {
+          await prisma.interview.create({
+            data: {
+              candidateId,
+              interviewerId,
+              scheduledAt: new Date(),
+              status: "completed",
+              completedAt: new Date(),
+              feedback: {
+                create: {
+                  result: result as any,
+                  feedback: null,
+                },
+              },
+            },
+          });
+          interviewsCreated++;
+          lastResult = result;
+        } catch (error) {
+          if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === "P2002"
+          ) {
+            warnings.push(`Duplicate interview: ${interviewerEmail} → ${c.email} — skipped`);
+            continue;
+          }
+          throw error;
+        }
+      }
+
+      // Update candidate status based on last round result
+      if (lastResult) {
+        let newStatus: string | null = null;
+        if (lastResult === "NO_HIRE") newStatus = "rejected";
+        else if (lastResult === "NO_SHOW") newStatus = "no_show";
+        // HIRE/WEAK_HIRE → keep in_pipeline (they continue)
+
+        if (newStatus) {
+          await prisma.candidate.update({
+            where: { id: candidateId },
+            data: { status: newStatus as any },
+          });
+        }
+      }
+    }
+  }
+
+  return NextResponse.json({
+    created: created.count,
+    total,
+    skipped: total - created.count,
+    interviewsCreated,
+    warnings: warnings.length > 0 ? warnings : undefined,
+  });
 }

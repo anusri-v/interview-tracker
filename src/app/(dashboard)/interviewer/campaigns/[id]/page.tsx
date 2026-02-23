@@ -3,7 +3,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import Link from "next/link";
 import CandidatesPageClient from "@/app/(dashboard)/admin/campaigns/[id]/candidates/CandidatesPageClient";
 
 export const dynamic = "force-dynamic";
@@ -120,21 +119,7 @@ export default async function InterviewerCampaignCandidatesPage({
   const paginatedCandidates = candidates.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   return (
-    <div className="space-y-4">
-      {campaign.type === "experienced" && campaign.status === "active" && (
-        <div className="flex justify-end">
-          <Link
-            href={`/interviewer/campaigns/${id}/availability`}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-            </svg>
-            Manage Availability
-          </Link>
-        </div>
-      )}
-      <CandidatesPageClient
+    <CandidatesPageClient
         campaignId={id}
         campaignType={campaign.type}
         isActive={campaign.status === "active"}
@@ -151,7 +136,6 @@ export default async function InterviewerCampaignCandidatesPage({
         updateCandidateStatus={noop}
         assignInterviewer={noop}
         createCandidate={noop}
-      />
-    </div>
+    />
   );
 }

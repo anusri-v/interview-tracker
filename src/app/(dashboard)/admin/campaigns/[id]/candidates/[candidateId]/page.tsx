@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { auditLog } from "@/lib/audit";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -24,8 +25,9 @@ async function assignInterviewer(candidateId: string, formData: FormData) {
   if (!candidate) return;
   if (candidate.campaign.status === "completed") return;
 
+  let interview;
   try {
-    await prisma.interview.create({
+    interview = await prisma.interview.create({
       data: { candidateId, interviewerId, scheduledAt },
     });
   } catch (error) {
@@ -37,6 +39,7 @@ async function assignInterviewer(candidateId: string, formData: FormData) {
     }
     throw error;
   }
+  await auditLog({ userId: session.user.id, action: "interview.assign", entityType: "Interview", entityId: interview.id, metadata: { candidateId, interviewerId } });
   revalidatePath(
     `/admin/campaigns/${candidate.campaignId}/candidates/${candidateId}`
   );

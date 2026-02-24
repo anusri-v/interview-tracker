@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { auditLog } from "@/lib/audit";
 import { Prisma } from "@prisma/client";
 
 type CandidateRow = {
@@ -12,7 +13,7 @@ type CandidateRow = {
   department?: string;
   resumeLink?: string;
   currentRole?: string;
-  rounds?: { interviewerEmail: string; result: string }[];
+  rounds?: { interviewerEmail: string; result: string; feedback?: string }[];
 };
 
 const VALID_RESULTS = ["HIRE", "NO_HIRE", "WEAK_HIRE", "NO_SHOW"];
@@ -131,7 +132,7 @@ export async function POST(
               feedback: {
                 create: {
                   result: result as any,
-                  feedback: null,
+                  feedback: round.feedback?.trim() || null,
                 },
               },
             },
@@ -166,6 +167,8 @@ export async function POST(
       }
     }
   }
+
+  await auditLog({ userId: session.user.id, action: "candidate.bulk_upload", entityType: "Campaign", entityId: campaignId, metadata: { total, created: created.count, skipped: total - created.count, interviewsCreated } });
 
   return NextResponse.json({
     created: created.count,

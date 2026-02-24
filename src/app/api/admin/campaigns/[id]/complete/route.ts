@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { auditLog } from "@/lib/audit";
 
 export async function POST(
   _request: Request,
@@ -40,5 +41,6 @@ export async function POST(
     where: { id },
     data: { status: "completed" },
   });
+  await auditLog({ userId: session.user.id, action: "campaign.complete", entityType: "Campaign", entityId: id });
   return NextResponse.json({ ok: true });
 }

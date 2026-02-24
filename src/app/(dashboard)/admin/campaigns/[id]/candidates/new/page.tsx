@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
+import { auditLog } from "@/lib/audit";
 import { authOptions } from "@/lib/auth";
 import CandidateNewForm from "./CandidateNewForm";
 
@@ -11,7 +12,7 @@ async function createCandidate(campaignId: string, formData: FormData) {
   "use server";
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/login");
-  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true } });
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true, type: true } });
   if (!campaign || campaign.status === "completed") redirect(`/admin/campaigns/${campaignId}`);
   const name = (formData.get("name") as string)?.trim();
   const email = (formData.get("email") as string)?.trim();
@@ -20,10 +21,14 @@ async function createCandidate(campaignId: string, formData: FormData) {
   const college = (formData.get("college") as string)?.trim() || null;
   const department = (formData.get("department") as string)?.trim() || null;
   const resumeLink = (formData.get("resumeLink") as string)?.trim() || null;
+  const currentRole = campaign.type === "fresher"
+    ? "Fresher"
+    : (formData.get("currentRole") as string)?.trim() || null;
   try {
-    await prisma.candidate.create({
-      data: { campaignId, name, email, phone, college, department, resumeLink },
+    const candidate = await prisma.candidate.create({
+      data: { campaignId, name, email, phone, college, department, resumeLink, currentRole },
     });
+    await auditLog({ userId: session.user.id, action: "candidate.create", entityType: "Candidate", entityId: candidate.id, metadata: { campaignId, name, email } });
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -80,6 +85,7 @@ export default async function NewCandidatePage({
       <h1 className="text-4xl font-bold text-foreground tracking-tight">Add Candidate</h1>
       <CandidateNewForm
         campaignId={campaignId}
+        campaignType={campaign.type}
         createCandidate={createCandidate}
         error={errorMessage}
       />

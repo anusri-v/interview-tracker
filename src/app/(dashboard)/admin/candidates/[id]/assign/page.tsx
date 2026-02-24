@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { auditLog } from "@/lib/audit";
 import Link from "next/link";
 import AssignInterviewersForm from "./AssignInterviewersForm";
 import { getServerSession } from "next-auth";
@@ -43,6 +44,7 @@ async function assignInterviewers(
     })),
     skipDuplicates: true,
   });
+  await auditLog({ userId: session.user.id, action: "interview.assign", entityType: "Candidate", entityId: candidateId, metadata: { interviewerIds, scheduledAt: scheduledAt.toISOString() } });
   redirect(`/admin/campaigns/${candidate.campaignId}/candidates`);
 }
 

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { auditLog } from "@/lib/audit";
 import Link from "next/link";
 import UpdateCandidateForm from "./UpdateCandidateForm";
 import { getServerSession } from "next-auth";
@@ -14,11 +15,11 @@ async function updateCandidate(
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || session.user.role !== "admin") redirect("/login");
   const status = formData.get("status") as string;
-  const roleChoice = (formData.get("role") as string)?.trim() || null;
-  const roleOther = (formData.get("roleOther") as string)?.trim() || null;
-  const role = roleChoice === "Other" ? roleOther : roleChoice;
+  const roleChoice = (formData.get("hiredRole") as string)?.trim() || null;
+  const roleOther = (formData.get("hiredRoleOther") as string)?.trim() || null;
+  const hiredRole = roleChoice === "Other" ? roleOther : roleChoice;
   if (!status || !["rejected", "in_pipeline", "selected"].includes(status)) return;
-  if (status === "selected" && !role) return;
+  if (status === "selected" && !hiredRole) return;
   const c = await prisma.candidate.findUnique({
     where: { id: candidateId },
     include: { campaign: { select: { id: true, status: true } } },
@@ -29,9 +30,10 @@ async function updateCandidate(
     where: { id: candidateId },
     data: {
       status: status as "rejected" | "in_pipeline" | "selected",
-      role,
+      hiredRole,
     },
   });
+  await auditLog({ userId: session.user.id, action: "candidate.status_change", entityType: "Candidate", entityId: candidateId, metadata: { status, hiredRole } });
   redirect(`/admin/campaigns/${c.campaignId}/candidates`);
 }
 

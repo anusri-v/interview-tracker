@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { auditLog } from "@/lib/audit";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -67,6 +68,7 @@ async function updateCandidateDetails(candidateId: string, formData: FormData) {
     where: { id: candidateId },
     data: { name, email, phone, college, department, resumeLink, currentRole },
   });
+  await auditLog({ userId: session.user.id, action: "candidate.update", entityType: "Candidate", entityId: candidateId });
   revalidatePath(`/admin/campaigns/${c.campaignId}/candidates`);
 }
 
@@ -87,6 +89,7 @@ async function updateCandidateStatus(candidateId: string, formData: FormData) {
     where: { id: candidateId },
     data: { status: status as any, hiredRole },
   });
+  await auditLog({ userId: session.user.id, action: "candidate.status_change", entityType: "Candidate", entityId: candidateId, metadata: { status, hiredRole } });
   revalidatePath(`/admin/campaigns/${c.campaignId}/candidates`);
 }
 
@@ -114,8 +117,9 @@ async function assignInterviewer(candidateId: string, formData: FormData) {
     await prisma.interview.delete({ where: { id: existingNoShow.id } });
   }
 
+  let interview;
   try {
-    await prisma.interview.create({
+    interview = await prisma.interview.create({
       data: { candidateId, interviewerId, scheduledAt },
     });
   } catch (error) {
@@ -128,6 +132,7 @@ async function assignInterviewer(candidateId: string, formData: FormData) {
     }
     throw error;
   }
+  await auditLog({ userId: session.user.id, action: "interview.assign", entityType: "Interview", entityId: interview.id, metadata: { candidateId, interviewerId } });
 
   // Consume matching availability slot if one exists
   await prisma.interviewerSlot.deleteMany({
@@ -158,9 +163,10 @@ async function createCandidate(campaignId: string, formData: FormData) {
     ? "Fresher"
     : (formData.get("currentRole") as string)?.trim() || null;
   try {
-    await prisma.candidate.create({
+    const candidate = await prisma.candidate.create({
       data: { campaignId, name, email, phone, college, department, resumeLink, currentRole },
     });
+    await auditLog({ userId: session.user.id, action: "candidate.create", entityType: "Candidate", entityId: candidate.id, metadata: { campaignId, name, email } });
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -190,6 +196,7 @@ async function cancelScheduledInterview(candidateId: string) {
   const scheduledInterview = candidate.interviews[0];
   if (!scheduledInterview) return;
   await prisma.interview.delete({ where: { id: scheduledInterview.id } });
+  await auditLog({ userId: session.user.id, action: "interview.cancel", entityType: "Interview", entityId: scheduledInterview.id, metadata: { candidateId } });
   revalidatePath(`/admin/campaigns/${candidate.campaignId}/candidates`);
 }
 
@@ -207,6 +214,7 @@ async function rescheduleNoShow(candidateId: string) {
     where: { id: candidateId },
     data: { status: "in_pipeline" },
   });
+  await auditLog({ userId: session.user.id, action: "candidate.status_change", entityType: "Candidate", entityId: candidateId, metadata: { status: "in_pipeline", from: "no_show", reason: "reschedule" } });
   revalidatePath(`/admin/campaigns/${candidate.campaignId}/candidates`);
 }
 
@@ -224,6 +232,7 @@ async function rejectNoShow(candidateId: string) {
     where: { id: candidateId },
     data: { status: "rejected" },
   });
+  await auditLog({ userId: session.user.id, action: "candidate.status_change", entityType: "Candidate", entityId: candidateId, metadata: { status: "rejected", from: "no_show" } });
   revalidatePath(`/admin/campaigns/${candidate.campaignId}/candidates`);
 }
 

@@ -14,7 +14,7 @@ type MappingOption =
   | "department"
   | "ignore";
 
-type RoundMapping = { interviewer: number; result: number }; // column indices
+type RoundMapping = { interviewer: number; result: number; feedback: number }; // column indices
 
 type UploadResult = {
   created: number;
@@ -128,9 +128,17 @@ export default function UploadCsvWithHistoryModal({
             return new RegExp(`^r(?:ound)?_?${roundNum}_?result$`).test(rl);
           });
           if (resultIdx >= 0) {
-            detectedRounds.push({ interviewer: i, result: resultIdx });
+            // Find corresponding feedback column (optional)
+            const feedbackIdx = rawHeaders.findIndex((rh) => {
+              const rl = rh.toLowerCase().replace(/\s+/g, "_");
+              return new RegExp(`^r(?:ound)?_?${roundNum}_?feedback$`).test(rl);
+            });
+            detectedRounds.push({ interviewer: i, result: resultIdx, feedback: feedbackIdx });
             autoMappings[i] = `round_${detectedRounds.length}_interviewer`;
             autoMappings[resultIdx] = `round_${detectedRounds.length}_result`;
+            if (feedbackIdx >= 0) {
+              autoMappings[feedbackIdx] = `round_${detectedRounds.length}_feedback`;
+            }
           }
         }
       }
@@ -152,10 +160,10 @@ export default function UploadCsvWithHistoryModal({
   }
 
   function addRound() {
-    setRoundMappings((prev) => [...prev, { interviewer: -1, result: -1 }]);
+    setRoundMappings((prev) => [...prev, { interviewer: -1, result: -1, feedback: -1 }]);
   }
 
-  function updateRoundMapping(roundIdx: number, field: "interviewer" | "result", colIdx: number) {
+  function updateRoundMapping(roundIdx: number, field: "interviewer" | "result" | "feedback", colIdx: number) {
     setRoundMappings((prev) => {
       const next = [...prev];
       next[roundIdx] = { ...next[roundIdx], [field]: colIdx };
@@ -176,6 +184,7 @@ export default function UploadCsvWithHistoryModal({
       const next = [...prev];
       if (rm.interviewer >= 0) next[rm.interviewer] = "ignore";
       if (rm.result >= 0) next[rm.result] = "ignore";
+      if (rm.feedback >= 0) next[rm.feedback] = "ignore";
       return next;
     });
     setRoundMappings((prev) => prev.filter((_, i) => i !== roundIdx));
@@ -225,9 +234,10 @@ export default function UploadCsvWithHistoryModal({
             const interviewerEmail = values[rm.interviewer]?.trim();
             const result = values[rm.result]?.trim()?.toUpperCase();
             if (!interviewerEmail || !result) return null;
-            return { interviewerEmail, result };
+            const feedback = rm.feedback >= 0 ? values[rm.feedback]?.trim() || undefined : undefined;
+            return { interviewerEmail, result, feedback };
           })
-          .filter(Boolean) as { interviewerEmail: string; result: string }[];
+          .filter(Boolean) as { interviewerEmail: string; result: string; feedback?: string }[];
 
         return {
           name,
@@ -335,14 +345,14 @@ export default function UploadCsvWithHistoryModal({
   }
 
   return (
-    <Modal open={open} onClose={handleClose} title={`Upload CSV — Step ${step} of 3`}>
+    <Modal open={open} onClose={handleClose} title={step === 1 ? "Upload CSV — Select File" : step === 2 ? "Upload CSV — Map Interview History" : "Upload CSV — Preview & Upload"}>
       {/* Step 1: File Upload */}
       {step === 1 && (
         <form onSubmit={handleFileUpload} className="space-y-3">
           <div className="text-sm text-foreground-secondary mb-4 space-y-1">
             <p><strong className="text-foreground">Required columns:</strong> name, email</p>
             <p><strong className="text-foreground">Optional:</strong> phone, current_role, resume_link, college, department</p>
-            <p><strong className="text-foreground">History:</strong> R1 Interviewer, R1 Result, R2 Interviewer, R2 Result, etc.</p>
+            <p><strong className="text-foreground">History:</strong> R1 Interviewer, R1 Result, R1 Feedback, R2 Interviewer, R2 Result, R2 Feedback, etc.</p>
           </div>
           <div>
             <label htmlFor="csv-file-hist" className="block text-sm font-medium mb-1 text-foreground">CSV file</label>
@@ -367,90 +377,99 @@ export default function UploadCsvWithHistoryModal({
         </form>
       )}
 
-      {/* Step 2: Column Mapping */}
+      {/* Step 2: Interview Round Mapping */}
       {step === 2 && (
         <div className="space-y-4">
-          <p className="text-sm text-foreground-secondary">Map each CSV column to a field:</p>
-
-          <div className="max-h-60 overflow-y-auto space-y-2">
-            {headers.map((h, i) => {
-              // Check if this column is used by a round mapping
-              const isRoundCol = roundMappings.some((rm) => rm.interviewer === i || rm.result === i);
-              return (
-                <div key={i} className="flex items-center gap-3">
-                  <span className="text-sm text-foreground font-medium min-w-[120px] truncate" title={h}>
-                    {h}
+          {/* Auto-detected fields summary */}
+          <div className="p-3 rounded-lg bg-surface text-sm text-foreground-secondary">
+            <p className="font-medium text-foreground mb-1">Auto-detected columns:</p>
+            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
+              {mappings.map((m, i) =>
+                m !== "ignore" && !String(m).startsWith("round_") ? (
+                  <span key={i}>
+                    <span className="text-foreground">{headers[i]}</span>
+                    <span className="text-foreground-muted"> → {String(m).replace("_", " ")}</span>
                   </span>
-                  <select
-                    value={isRoundCol ? mappings[i] : (mappings[i] as MappingOption)}
-                    onChange={(e) => setMapping(i, e.target.value)}
-                    disabled={isRoundCol}
-                    className="flex-1 border border-border rounded px-2 py-1.5 bg-card text-foreground text-sm disabled:opacity-50"
-                  >
-                    <option value="ignore">— Ignore —</option>
-                    <option value="name">Name</option>
-                    <option value="email">Email</option>
-                    <option value="phone">Phone</option>
-                    <option value="current_role">Current Role</option>
-                    <option value="resume_link">Resume Link</option>
-                    <option value="college">College</option>
-                    <option value="department">Department</option>
-                  </select>
-                </div>
-              );
-            })}
+                ) : null
+              )}
+            </div>
           </div>
 
           {/* Round mappings */}
-          <div className="border-t border-border pt-3">
-            <div className="flex items-center justify-between mb-2">
+          <div>
+            <div className="flex items-center justify-between mb-3">
               <p className="text-sm font-medium text-foreground">Interview Rounds</p>
               <button
                 type="button"
                 onClick={addRound}
-                className="text-xs px-3 py-1 bg-primary text-white rounded-lg hover:bg-primary-hover"
+                className="text-xs px-3 py-1.5 bg-primary text-white rounded-lg hover:bg-primary-hover"
               >
                 + Add Round
               </button>
             </div>
             {roundMappings.length === 0 && (
-              <p className="text-xs text-foreground-muted">No round mappings. Click &quot;Add Round&quot; to map interview history columns.</p>
+              <p className="text-sm text-foreground-muted py-4 text-center">No interview history columns detected. Click &quot;+ Add Round&quot; to map them manually.</p>
             )}
-            {roundMappings.map((rm, ri) => (
-              <div key={ri} className="flex items-center gap-2 mb-2 p-2 bg-surface rounded-lg">
-                <span className="text-xs font-medium text-foreground-secondary whitespace-nowrap">R{ri + 1}</span>
-                <select
-                  value={rm.interviewer}
-                  onChange={(e) => updateRoundMapping(ri, "interviewer", parseInt(e.target.value))}
-                  className="flex-1 border border-border rounded px-2 py-1 bg-card text-foreground text-xs"
-                >
-                  <option value={-1}>Interviewer column...</option>
-                  {headers.map((h, i) => (
-                    <option key={i} value={i}>{h}</option>
-                  ))}
-                </select>
-                <select
-                  value={rm.result}
-                  onChange={(e) => updateRoundMapping(ri, "result", parseInt(e.target.value))}
-                  className="flex-1 border border-border rounded px-2 py-1 bg-card text-foreground text-xs"
-                >
-                  <option value={-1}>Result column...</option>
-                  {headers.map((h, i) => (
-                    <option key={i} value={i}>{h}</option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => removeRound(ri)}
-                  className="text-foreground-muted hover:text-danger transition-colors"
-                  title="Remove round"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            ))}
+            <div className="space-y-3">
+              {roundMappings.map((rm, ri) => (
+                <div key={ri} className="p-3 bg-surface rounded-lg border border-border">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-foreground">Round {ri + 1}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeRound(ri)}
+                      className="text-foreground-muted hover:text-danger transition-colors"
+                      title="Remove round"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="block text-[11px] text-foreground-muted mb-1">Interviewer</label>
+                      <select
+                        value={rm.interviewer}
+                        onChange={(e) => updateRoundMapping(ri, "interviewer", parseInt(e.target.value))}
+                        className="w-full border border-border rounded px-2 py-1.5 bg-card text-foreground text-xs"
+                      >
+                        <option value={-1}>Select column...</option>
+                        {headers.map((h, i) => (
+                          <option key={i} value={i}>{h}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-foreground-muted mb-1">Result</label>
+                      <select
+                        value={rm.result}
+                        onChange={(e) => updateRoundMapping(ri, "result", parseInt(e.target.value))}
+                        className="w-full border border-border rounded px-2 py-1.5 bg-card text-foreground text-xs"
+                      >
+                        <option value={-1}>Select column...</option>
+                        {headers.map((h, i) => (
+                          <option key={i} value={i}>{h}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-foreground-muted mb-1">Feedback (optional)</label>
+                      <select
+                        value={rm.feedback}
+                        onChange={(e) => updateRoundMapping(ri, "feedback", parseInt(e.target.value))}
+                        className="w-full border border-border rounded px-2 py-1.5 bg-card text-foreground text-xs"
+                      >
+                        <option value={-1}>None</option>
+                        {headers.map((h, i) => (
+                          <option key={i} value={i}>{h}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           {error && <p className="text-sm text-danger">{error}</p>}

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { auditLog } from "@/lib/audit";
 import CampaignNewForm from "./CampaignNewForm";
 
 async function createCampaign(formData: FormData) {
@@ -9,13 +10,17 @@ async function createCampaign(formData: FormData) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/login");
   const name = formData.get("name") as string;
+  const type = formData.get("type") as string;
   if (!name?.trim()) return;
-  await prisma.campaign.create({
+  if (type !== "experienced" && type !== "fresher") return;
+  const campaign = await prisma.campaign.create({
     data: {
       name: name.trim(),
+      type,
       createdById: session.user.id,
     },
   });
+  await auditLog({ userId: session.user.id, action: "campaign.create", entityType: "Campaign", entityId: campaign.id, metadata: { name: name.trim(), type } });
   redirect("/admin/campaigns");
 }
 

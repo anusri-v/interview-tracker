@@ -53,6 +53,7 @@ model User {
   createdCampaigns Campaign[] @relation("CampaignCreator")
   interviewsConducted Interview[]
   availabilitySlots InterviewerSlot[] @relation("InterviewerSlots")
+  auditLogs         AuditLog[]
 }
 
 model Campaign {
@@ -131,4 +132,19 @@ model InterviewerSlot {
 
   @@unique([interviewerId, campaignId, startTime])
   @@index([campaignId, interviewerId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  action     String
+  entityType String
+  entityId   String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([action])
 }

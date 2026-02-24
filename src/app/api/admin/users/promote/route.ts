@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { auditLog } from "@/lib/audit";
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
@@ -21,5 +22,6 @@ export async function POST(request: Request) {
     where: { id: body.userId },
     data: { role: "admin" },
   });
+  await auditLog({ userId: session.user.id, action: "user.promote", entityType: "User", entityId: body.userId });
   return NextResponse.json({ ok: true });
 }

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { auditLog } from "@/lib/audit";
 import Link from "next/link";
 import MarkCampaignCompletedButton from "./[id]/MarkCampaignCompletedButton";
 import NewCampaignButton from "./NewCampaignButton";
@@ -11,13 +12,17 @@ async function createCampaign(formData: FormData) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/login");
   const name = formData.get("name") as string;
+  const type = formData.get("type") as string;
   if (!name?.trim()) return;
-  await prisma.campaign.create({
+  if (type !== "experienced" && type !== "fresher") return;
+  const campaign = await prisma.campaign.create({
     data: {
       name: name.trim(),
+      type,
       createdById: session.user.id,
     },
   });
+  await auditLog({ userId: session.user.id, action: "campaign.create", entityType: "Campaign", entityId: campaign.id, metadata: { name: name.trim(), type } });
   redirect("/admin/campaigns");
 }
 
@@ -41,6 +46,7 @@ export default async function CampaignsListPage() {
             <thead>
               <tr className="bg-surface">
                 <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">Name</th>
+                <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">Type</th>
                 <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">Status</th>
                 <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">Candidates</th>
                 <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">Actions</th>
@@ -53,6 +59,15 @@ export default async function CampaignsListPage() {
                     <Link href={`/admin/campaigns/${c.id}`} className="font-medium text-foreground hover:text-primary transition-colors">
                       {c.name}
                     </Link>
+                  </td>
+                  <td className="px-5 py-4">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      c.type === "experienced"
+                        ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                        : "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300"
+                    }`}>
+                      {c.type === "experienced" ? "Experienced" : "Fresher"}
+                    </span>
                   </td>
                   <td className="px-5 py-4">
                     <span className="inline-flex items-center gap-2 text-sm">

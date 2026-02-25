@@ -115,7 +115,7 @@ export async function POST(
           continue;
         }
 
-        const result = round.result.trim().toUpperCase();
+        const result = round.result.trim().toUpperCase().replace(/\s+/g, "_");
         if (!VALID_RESULTS.includes(result)) {
           warnings.push(`Invalid result "${round.result}" — skipped for ${c.email}`);
           continue;

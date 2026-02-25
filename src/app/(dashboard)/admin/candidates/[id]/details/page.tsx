@@ -34,6 +34,9 @@ export default async function CandidateDetailsPage({
   if (!candidate) notFound();
 
   const isExperienced = candidate.campaign?.type === "experienced";
+  const activeInterviews = candidate.interviews.filter(
+    (i) => i.status === "scheduled" || i.status === "ongoing"
+  );
   const completedInterviews = candidate.interviews.filter(
     (i) => i.status === "completed"
   );
@@ -89,6 +92,48 @@ export default async function CandidateDetailsPage({
           )}
         </div>
       </div>
+
+      {/* Active Interviews */}
+      {activeInterviews.length > 0 && (
+        <section>
+          <h2 className="text-xl font-bold mb-3 text-foreground tracking-tight">
+            Active Interviews
+          </h2>
+          <ul className="space-y-3">
+            {activeInterviews.map((interview) => (
+              <li
+                key={interview.id}
+                className="border border-border rounded-xl bg-card p-4 text-sm text-foreground"
+              >
+                <div className="flex items-center justify-between">
+                  <p className="font-medium">
+                    {interview.interviewer.name ?? interview.interviewer.email}
+                  </p>
+                  <div className="flex items-center gap-3">
+                    {interview.scheduledAt && (
+                      <span className="text-xs text-foreground-muted">
+                        {new Date(interview.scheduledAt).toLocaleDateString("en-IN", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}{" "}
+                        {new Date(interview.scheduledAt).toLocaleTimeString("en-IN", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    )}
+                    <StatusBadge
+                      variant={interview.status === "ongoing" ? "interview_ongoing" : "interview_scheduled"}
+                      label={interview.status === "ongoing" ? "Ongoing" : "Upcoming"}
+                    />
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* Past Interview Feedbacks */}
       <section>

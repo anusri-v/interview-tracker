@@ -232,7 +232,7 @@ export default function UploadCsvWithHistoryModal({
         const rounds = roundMappings
           .map((rm) => {
             const interviewerEmail = values[rm.interviewer]?.trim();
-            const result = values[rm.result]?.trim()?.toUpperCase();
+            const result = values[rm.result]?.trim()?.toUpperCase()?.replace(/\s+/g, "_");
             if (!interviewerEmail || !result) return null;
             const feedback = rm.feedback >= 0 ? values[rm.feedback]?.trim() || undefined : undefined;
             return { interviewerEmail, result, feedback };

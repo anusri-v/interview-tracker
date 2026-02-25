@@ -36,3 +36,6 @@ next-env.d.ts
 
 # prisma
 prisma/migrations/**/migration_lock.toml
+
+# tokens
+figma_token.txt

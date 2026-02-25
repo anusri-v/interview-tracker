@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { signOut } from "next-auth/react";
@@ -92,7 +93,9 @@ export default function Sidebar({
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   // Campaign dropdown logic (same as CampaignDropdown), with session persistence
   const campaignPrefix = `/${basePath}/campaigns/`;
@@ -243,11 +246,11 @@ export default function Sidebar({
       <div className="px-4 py-2 border-t border-border/50">
         <button
           type="button"
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
           className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-foreground-secondary hover:text-foreground hover:bg-foreground/5 transition-colors w-full"
         >
-          {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-          {theme === "dark" ? "Light mode" : "Dark mode"}
+          {mounted && resolvedTheme === "dark" ? <SunIcon /> : <MoonIcon />}
+          {mounted ? (resolvedTheme === "dark" ? "Light mode" : "Dark mode") : "\u00A0"}
         </button>
       </div>
 

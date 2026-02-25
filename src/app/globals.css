@@ -3,8 +3,26 @@
 @tailwind utilities;
 
 :root {
+  --background: #F9FAFB;
+  --sidebar: #FFFFFF;
+  --surface: #F3F4F6;
+  --card: #FFFFFF;
+  --border: #E5E7EB;
+  --foreground: #111827;
+  --foreground-secondary: #4B5563;
+  --foreground-muted: #9CA3AF;
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --info: #06b6d4;
+}
+
+.dark {
   --background: #111827;
   --sidebar: #0f172a;
+  --surface: #0f172a;
   --card: #1f2937;
   --border: #374151;
   --foreground: #f9fafb;

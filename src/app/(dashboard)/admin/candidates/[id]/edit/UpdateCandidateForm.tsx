@@ -35,9 +35,9 @@ export default function UpdateCandidateForm({
   const [pendingRoleDisplay, setPendingRoleDisplay] = useState("");
 
   const isPipeline = candidate.status === "in_pipeline";
-  const currentRoleIsPreset = ROLE_OPTIONS.some((o) => o.value === (candidate.role ?? ""));
-  const defaultRoleChoice = candidate.role && currentRoleIsPreset ? candidate.role : (candidate.role ? "Other" : "");
-  const defaultRoleOther = candidate.role && !currentRoleIsPreset ? candidate.role : "";
+  const currentRoleIsPreset = ROLE_OPTIONS.some((o) => o.value === (candidate.hiredRole ?? ""));
+  const defaultRoleChoice = candidate.hiredRole && currentRoleIsPreset ? candidate.hiredRole : (candidate.hiredRole ? "Other" : "");
+  const defaultRoleOther = candidate.hiredRole && !currentRoleIsPreset ? candidate.hiredRole : "";
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -45,8 +45,8 @@ export default function UpdateCandidateForm({
     const form = formRef.current;
     if (!form) return;
     const status = (form.elements.namedItem("status") as HTMLSelectElement).value;
-    const roleChoice = (form.elements.namedItem("role") as HTMLSelectElement).value;
-    const roleOther = (form.elements.namedItem("roleOther") as HTMLInputElement).value.trim();
+    const roleChoice = (form.elements.namedItem("hiredRole") as HTMLSelectElement).value;
+    const roleOther = (form.elements.namedItem("hiredRoleOther") as HTMLInputElement).value.trim();
     if (status === "selected") {
       if (!roleChoice) {
         setFieldError("Please select a role when marking as hired.");
@@ -104,10 +104,10 @@ export default function UpdateCandidateForm({
         </select>
       </div>
       <div>
-        <label htmlFor="role" className="block text-sm font-medium mb-1 text-foreground">Role (when hired)</label>
+        <label htmlFor="hiredRole" className="block text-sm font-medium mb-1 text-foreground">Role (when hired)</label>
         <select
-          id="role"
-          name="role"
+          id="hiredRole"
+          name="hiredRole"
           defaultValue={defaultRoleChoice}
           className="w-full border border-border rounded px-3 py-2 bg-card text-foreground"
         >
@@ -118,10 +118,10 @@ export default function UpdateCandidateForm({
         </select>
       </div>
       <div id="role-other-wrap">
-        <label htmlFor="roleOther" className="block text-sm font-medium mb-1 text-foreground">Other role (if Other selected)</label>
+        <label htmlFor="hiredRoleOther" className="block text-sm font-medium mb-1 text-foreground">Other role (if Other selected)</label>
         <input
-          id="roleOther"
-          name="roleOther"
+          id="hiredRoleOther"
+          name="hiredRoleOther"
           type="text"
           defaultValue={defaultRoleOther}
           placeholder="e.g. Product Manager"

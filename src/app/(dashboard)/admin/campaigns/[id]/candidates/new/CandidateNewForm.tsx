@@ -5,10 +5,12 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 export default function CandidateNewForm({
   campaignId,
+  campaignType,
   createCandidate,
   error,
 }: {
   campaignId: string;
+  campaignType: string;
   createCandidate: (campaignId: string, formData: FormData) => Promise<void>;
   error?: string;
 }) {
@@ -100,6 +102,18 @@ export default function CandidateNewForm({
           className="w-full border border-border rounded px-3 py-2 bg-card text-foreground placeholder:text-foreground-muted"
         />
       </div>
+      {campaignType === "experienced" && (
+        <div>
+          <label htmlFor="currentRole" className="block text-sm font-medium mb-1 text-foreground">Current Role</label>
+          <input
+            id="currentRole"
+            name="currentRole"
+            type="text"
+            placeholder="e.g. Software Engineer, Product Manager"
+            className="w-full border border-border rounded px-3 py-2 bg-card text-foreground placeholder:text-foreground-muted"
+          />
+        </div>
+      )}
         <button
           type="submit"
           disabled={isPending}

@@ -39,6 +39,21 @@ export default function CampaignNewForm({
             required
           />
         </div>
+        <div>
+          <label htmlFor="type" className="block text-sm font-medium mb-1 text-foreground">
+            Campaign type
+          </label>
+          <select
+            id="type"
+            name="type"
+            className="w-full border border-border rounded px-3 py-2 bg-card text-foreground"
+            required
+          >
+            <option value="">Select type…</option>
+            <option value="experienced">Experienced</option>
+            <option value="fresher">Fresher</option>
+          </select>
+        </div>
         <button
           type="submit"
           disabled={isPending}

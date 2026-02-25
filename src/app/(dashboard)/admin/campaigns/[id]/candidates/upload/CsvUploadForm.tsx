@@ -8,7 +8,7 @@ export default function CsvUploadForm({ campaignId }: { campaignId: string }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [pendingRows, setPendingRows] = useState<{ name: string; email: string; phone?: string; college?: string; department?: string; resumeLink?: string }[]>([]);
+  const [pendingRows, setPendingRows] = useState<{ name: string; email: string; phone?: string; college?: string; department?: string; resumeLink?: string; currentRole?: string }[]>([]);
   const router = useRouter();
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -38,7 +38,8 @@ export default function CsvUploadForm({ campaignId }: { campaignId: string }) {
     const collegeIdx = headersLower.indexOf("college");
     const deptIdx = headersLower.indexOf("department");
     const resumeIdx = headersLower.findIndex((h) => h === "resume_link" || h === "resumelink" || /resume/.test(h));
-    const rows: { name: string; email: string; phone?: string; college?: string; department?: string; resumeLink?: string }[] = [];
+    const roleIdx = headersLower.findIndex((h) => h === "current_role" || h === "currentrole" || h === "role");
+    const rows: { name: string; email: string; phone?: string; college?: string; department?: string; resumeLink?: string; currentRole?: string }[] = [];
     for (let i = 1; i < lines.length; i++) {
       const values = parseCsvLine(lines[i]);
       const name = values[nameIdx]?.trim();
@@ -48,7 +49,8 @@ export default function CsvUploadForm({ campaignId }: { campaignId: string }) {
       const college = collegeIdx >= 0 ? values[collegeIdx]?.trim() || undefined : undefined;
       const department = deptIdx >= 0 ? values[deptIdx]?.trim() || undefined : undefined;
       const resumeLink = resumeIdx >= 0 ? values[resumeIdx]?.trim() || undefined : undefined;
-      rows.push({ name, email, phone, college, department, resumeLink });
+      const currentRole = roleIdx >= 0 ? values[roleIdx]?.trim() || undefined : undefined;
+      rows.push({ name, email, phone, college, department, resumeLink, currentRole });
     }
     if (rows.length === 0) {
       setError("No valid rows found (need name and email).");
@@ -73,7 +75,7 @@ export default function CsvUploadForm({ campaignId }: { campaignId: string }) {
         setError(data.error ?? "Upload failed.");
         return;
       }
-      router.push(`/admin/campaigns/${campaignId}`);
+      router.push(`/admin/campaigns/${campaignId}/candidates`);
       router.refresh();
     });
   }

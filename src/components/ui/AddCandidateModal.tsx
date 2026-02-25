@@ -8,11 +8,13 @@ export default function AddCandidateModal({
   open,
   onClose,
   campaignId,
+  campaignType,
   createCandidate,
 }: {
   open: boolean;
   onClose: () => void;
   campaignId: string;
+  campaignType: string;
   createCandidate: (campaignId: string, formData: FormData) => Promise<void>;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -56,6 +58,7 @@ export default function AddCandidateModal({
               className="w-full border border-border rounded px-3 py-2 bg-card text-foreground placeholder:text-foreground-muted" />
           </div>
         </div>
+        {campaignType !== "experienced" && (
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label htmlFor="add-college" className="block text-sm font-medium mb-1 text-foreground">College</label>
@@ -68,6 +71,14 @@ export default function AddCandidateModal({
               className="w-full border border-border rounded px-3 py-2 bg-card text-foreground placeholder:text-foreground-muted" />
           </div>
         </div>
+        )}
+        {campaignType === "experienced" && (
+          <div>
+            <label htmlFor="add-currentRole" className="block text-sm font-medium mb-1 text-foreground">Current Role</label>
+            <input id="add-currentRole" name="currentRole" type="text" placeholder="e.g. Software Engineer, Product Manager"
+              className="w-full border border-border rounded px-3 py-2 bg-card text-foreground placeholder:text-foreground-muted" />
+          </div>
+        )}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} disabled={isPending}
             className="px-4 py-2 border border-border rounded-lg bg-card text-foreground hover:bg-surface disabled:opacity-50">

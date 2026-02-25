@@ -6,6 +6,7 @@ import Link from "next/link";
 import StartInterviewButton from "./StartInterviewButton";
 import CompleteInterviewForm from "./CompleteInterviewForm";
 import StatusBadge from "@/components/ui/StatusBadge";
+import SkillRatingsDisplay from "@/components/ui/SkillRatingsDisplay";
 
 export default async function InterviewDetailPage({
   params,
@@ -21,7 +22,7 @@ export default async function InterviewDetailPage({
     include: {
       candidate: {
         include: {
-          campaign: { select: { name: true } },
+          campaign: { select: { name: true, type: true } },
           interviews: {
             where: { status: "completed" },
             include: {
@@ -38,11 +39,14 @@ export default async function InterviewDetailPage({
 
   if (!interview || interview.interviewerId !== session.user.id) notFound();
 
+  const campaignType = interview.candidate.campaign?.type;
+  const isExperienced = campaignType === "experienced";
   const feedbackResult = interview.feedback?.result;
-  let feedbackVariant: "hire" | "no_hire" | "weak_hire" | undefined;
+  let feedbackVariant: "hire" | "no_hire" | "weak_hire" | "no_show" | undefined;
   if (feedbackResult === "HIRE") feedbackVariant = "hire";
   else if (feedbackResult === "NO_HIRE") feedbackVariant = "no_hire";
   else if (feedbackResult === "WEAK_HIRE") feedbackVariant = "weak_hire";
+  else if (feedbackResult === "NO_SHOW") feedbackVariant = "no_show";
 
   return (
     <div className="space-y-8 max-w-2xl">
@@ -57,8 +61,8 @@ export default async function InterviewDetailPage({
             {interview.candidate.email} · {interview.candidate.campaign?.name}
           </p>
           {interview.candidate.phone && <p className="text-sm text-foreground-secondary">Phone: {interview.candidate.phone}</p>}
-          {interview.candidate.college && <p className="text-sm text-foreground-secondary">College: {interview.candidate.college}</p>}
-          {interview.candidate.department && <p className="text-sm text-foreground-secondary">Department: {interview.candidate.department}</p>}
+          {!isExperienced && interview.candidate.college && <p className="text-sm text-foreground-secondary">College: {interview.candidate.college}</p>}
+          {!isExperienced && interview.candidate.department && <p className="text-sm text-foreground-secondary">Department: {interview.candidate.department}</p>}
           {interview.candidate.resumeLink && (
             <p className="text-sm">
               Resume:{" "}
@@ -85,10 +89,13 @@ export default async function InterviewDetailPage({
                   <>
                     <p className="mt-2">
                       <span className="font-medium">Result: </span>
-                      <StatusBadge variant={i.feedback.result as any} />
+                      <StatusBadge variant={i.feedback.result.toLowerCase() as any} />
                     </p>
                     <p className="mt-2 text-foreground-secondary">{i.feedback.feedback}</p>
-                    <p className="mt-1 text-foreground-muted">Pointers: {i.feedback.pointersForNextInterviewer}</p>
+                    <SkillRatingsDisplay skillRatings={i.feedback.skillRatings} />
+                    {i.feedback.pointersForNextInterviewer && (
+                      <p className="mt-1 text-foreground-muted">Pointers: {i.feedback.pointersForNextInterviewer}</p>
+                    )}
                   </>
                 )}
               </li>
@@ -102,7 +109,7 @@ export default async function InterviewDetailPage({
       )}
 
       {interview.status === "ongoing" && (
-        <CompleteInterviewForm interviewId={interview.id} />
+        <CompleteInterviewForm interviewId={interview.id} campaignType={campaignType} />
       )}
 
       {interview.status === "completed" && interview.feedback && (
@@ -113,9 +120,12 @@ export default async function InterviewDetailPage({
             {feedbackVariant && <StatusBadge variant={feedbackVariant} />}
           </p>
           <p className="text-sm mt-3 text-foreground-secondary">{interview.feedback.feedback}</p>
-          <p className="text-sm mt-2 text-foreground-muted">
-            Pointers for next: {interview.feedback.pointersForNextInterviewer}
-          </p>
+          <SkillRatingsDisplay skillRatings={interview.feedback.skillRatings} />
+          {interview.feedback.pointersForNextInterviewer && (
+            <p className="text-sm mt-2 text-foreground-muted">
+              Pointers for next: {interview.feedback.pointersForNextInterviewer}
+            </p>
+          )}
         </div>
       )}
     </div>

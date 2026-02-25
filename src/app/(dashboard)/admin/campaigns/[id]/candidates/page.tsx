@@ -283,7 +283,10 @@ export default async function CampaignCandidatesPage({
         name: true,
         email: true,
         interviewsConducted: {
-          where: { status: { in: ["scheduled", "ongoing"] } },
+          where: {
+            status: { in: ["scheduled", "ongoing"] },
+            candidate: { campaignId: id },
+          },
           select: { status: true },
         },
       },

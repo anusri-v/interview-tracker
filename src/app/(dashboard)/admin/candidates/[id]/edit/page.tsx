@@ -25,7 +25,7 @@ async function updateCandidate(
     include: { campaign: { select: { id: true, status: true } } },
   });
   if (!c) redirect("/admin");
-  if (c.campaign.status === "completed") redirect(`/admin/campaigns/${c.campaignId}`);
+  if (c.campaign.status === "completed") redirect(`/admin/campaigns/${c.campaignId}/candidates`);
   await prisma.candidate.update({
     where: { id: candidateId },
     data: {
@@ -51,7 +51,7 @@ export default async function EditCandidatePage({
     include: { campaign: { select: { id: true, name: true, status: true } } },
   });
   if (!candidate) notFound();
-  if (candidate.campaign.status === "completed") redirect(`/admin/campaigns/${candidate.campaignId}`);
+  if (candidate.campaign.status === "completed") redirect(`/admin/campaigns/${candidate.campaignId}/candidates`);
 
   return (
     <div className="max-w-md space-y-4">

@@ -8,6 +8,7 @@ function getDisplayStatus(c: {
 }): string {
   if (c.status === "rejected") return "rejected";
   if (c.status === "selected") return "selected";
+  if (c.status === "no_show") return "no_show";
   const hasOngoing = c.interviews.some((i) => i.status === "ongoing");
   const hasScheduled = c.interviews.some((i) => i.status === "scheduled");
   if (hasOngoing) return "interview_ongoing";
@@ -57,7 +58,8 @@ export async function GET(
     "college",
     "department",
     "status",
-    "role",
+    "current_role",
+    "hired_role",
   ];
   const headerLine = headers.join(",");
 
@@ -70,7 +72,8 @@ export async function GET(
       escapeCsvCell(c.college),
       escapeCsvCell(c.department),
       escapeCsvCell(displayStatus),
-      escapeCsvCell(c.role),
+      escapeCsvCell(c.currentRole),
+      escapeCsvCell(c.hiredRole),
     ].join(",");
   });
 

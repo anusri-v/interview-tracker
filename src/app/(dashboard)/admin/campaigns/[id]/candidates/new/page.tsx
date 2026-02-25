@@ -13,7 +13,7 @@ async function createCandidate(campaignId: string, formData: FormData) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/login");
   const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true, type: true } });
-  if (!campaign || campaign.status === "completed") redirect(`/admin/campaigns/${campaignId}`);
+  if (!campaign || campaign.status === "completed") redirect(`/admin/campaigns/${campaignId}/candidates`);
   const name = (formData.get("name") as string)?.trim();
   const email = (formData.get("email") as string)?.trim();
   if (!name || !email) return;
@@ -52,7 +52,7 @@ async function createCandidate(campaignId: string, formData: FormData) {
     }
     throw error;
   }
-  redirect(`/admin/campaigns/${campaignId}`);
+  redirect(`/admin/campaigns/${campaignId}/candidates`);
 }
 
 export default async function NewCandidatePage({
@@ -65,7 +65,7 @@ export default async function NewCandidatePage({
   const { id: campaignId } = await params;
   const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
   if (!campaign) notFound();
-  if (campaign.status === "completed") redirect(`/admin/campaigns/${campaignId}`);
+  if (campaign.status === "completed") redirect(`/admin/campaigns/${campaignId}/candidates`);
 
   const errorParam = searchParams?.error;
   const errorMessage =
@@ -79,7 +79,7 @@ export default async function NewCandidatePage({
 
   return (
     <div className="max-w-md space-y-4">
-      <Link href={`/admin/campaigns/${campaignId}`} className="text-sm text-primary hover:underline">
+      <Link href={`/admin/campaigns/${campaignId}/candidates`} className="text-sm text-primary hover:underline">
         ← Back to {campaign.name}
       </Link>
       <h1 className="text-4xl font-bold text-foreground tracking-tight">Add Candidate</h1>

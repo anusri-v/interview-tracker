@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  darkMode: "class",
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -8,14 +9,14 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        background: "#111827",
-        sidebar: "#0F172A",
-        surface: "#0F172A",
-        card: "#1F2937",
-        border: "#374151",
-        foreground: "#F9FAFB",
-        "foreground-secondary": "#9CA3AF",
-        "foreground-muted": "#6B7280",
+        background: "var(--background)",
+        sidebar: "var(--sidebar)",
+        surface: "var(--surface)",
+        card: "var(--card)",
+        border: "var(--border)",
+        foreground: "var(--foreground)",
+        "foreground-secondary": "var(--foreground-secondary)",
+        "foreground-muted": "var(--foreground-muted)",
         primary: {
           DEFAULT: "#3B82F6",
           hover: "#2563EB",

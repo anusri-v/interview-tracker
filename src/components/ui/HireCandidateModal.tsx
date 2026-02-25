@@ -39,7 +39,7 @@ export default function HireCandidateModal({
         <input type="hidden" name="status" value="selected" />
         <div>
           <label htmlFor="hire-role" className="block text-sm font-medium mb-1 text-foreground">Select Role</label>
-          <select id="hire-role" name="role" required
+          <select id="hire-role" name="hiredRole" required
             className="w-full border border-border rounded px-3 py-2 bg-card text-foreground appearance-none cursor-pointer">
             <option value="">Choose a role…</option>
             <option value="SDE">SDE</option>

@@ -11,6 +11,7 @@ type CandidateRow = {
   college?: string;
   department?: string;
   resumeLink?: string;
+  currentRole?: string;
 };
 
 type UploadResult = {
@@ -133,7 +134,7 @@ export default function UploadCsvModal({
     <Modal open={open} onClose={handleClose} title="Upload CSV">
       <div className="text-sm text-foreground-secondary mb-4 space-y-1">
         <p><strong className="text-foreground">Required columns:</strong> name, email</p>
-        <p><strong className="text-foreground">Optional columns:</strong> phone, college, department, resume_link</p>
+        <p><strong className="text-foreground">Optional columns:</strong> phone, college, department, resume_link, current_role</p>
       </div>
       <form onSubmit={handleSubmit} className="space-y-3">
         <div>
@@ -183,6 +184,9 @@ async function parseCsvFile(file: File): Promise<CandidateRow[]> {
   const resumeIdx = headersLower.findIndex(
     (h) => h === "resume_link" || h === "resumelink" || /resume/.test(h)
   );
+  const roleIdx = headersLower.findIndex(
+    (h) => h === "current_role" || h === "currentrole" || h === "role"
+  );
   const rows: CandidateRow[] = [];
   for (let i = 1; i < lines.length; i++) {
     const values = parseCsvLine(lines[i]);
@@ -196,6 +200,7 @@ async function parseCsvFile(file: File): Promise<CandidateRow[]> {
       college: collegeIdx >= 0 ? values[collegeIdx]?.trim() || undefined : undefined,
       department: deptIdx >= 0 ? values[deptIdx]?.trim() || undefined : undefined,
       resumeLink: resumeIdx >= 0 ? values[resumeIdx]?.trim() || undefined : undefined,
+      currentRole: roleIdx >= 0 ? values[roleIdx]?.trim() || undefined : undefined,
     });
   }
   if (rows.length === 0) {

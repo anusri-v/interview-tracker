@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { signOut } from "next-auth/react";
+import { useTheme } from "next-themes";
 import { useResolvedCampaignId } from "@/hooks/useResolvedCampaignId";
 
 type Campaign = { id: string; name: string };
@@ -56,6 +57,22 @@ function AdminsIcon() {
   );
 }
 
+function SunIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
+    </svg>
+  );
+}
+
 function LogOutIcon() {
   return (
     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -75,6 +92,7 @@ export default function Sidebar({
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { theme, setTheme } = useTheme();
 
   // Campaign dropdown logic (same as CampaignDropdown), with session persistence
   const campaignPrefix = `/${basePath}/campaigns/`;
@@ -127,11 +145,11 @@ export default function Sidebar({
   }
 
   // Determine candidates href: use campaign from path when on campaign subpath, else session/default
-  const campaignIdMatch = pathname.match(/^\/admin\/campaigns\/([^/]+)/);
-  const candidatesCampaignId = campaignIdMatch?.[1] ?? (selectedId || defaultCampaignId);
+  const campaignIdMatch = pathname.match(/^\/(admin|interviewer)\/campaigns\/([^/]+)/);
+  const candidatesCampaignId = campaignIdMatch?.[2] ?? (selectedId || defaultCampaignId);
   const candidatesHref = candidatesCampaignId
-    ? `/admin/campaigns/${candidatesCampaignId}/candidates`
-    : "/admin/candidates";
+    ? `/${basePath}/campaigns/${candidatesCampaignId}/candidates`
+    : isAdmin ? "/admin/candidates" : `/interviewer`;
 
   // Build campaign-aware hrefs so navigation preserves the selected campaign
   const campaignQuery = selectedId ? `?campaignId=${selectedId}` : "";
@@ -148,6 +166,7 @@ export default function Sidebar({
     : [
         { href: `/interviewer${campaignQuery}`, label: "Dashboard", icon: DashboardIcon, match: (p: string) => p === "/interviewer" },
         { href: `/interviewer/interviews${campaignQuery}`, label: "My Interviews", icon: InterviewsIcon, match: (p: string) => p.startsWith("/interviewer/interviews") },
+        { href: candidatesHref, label: "Candidates", icon: CandidatesIcon, match: (p: string) => p.includes("/candidates") || p.match(/^\/interviewer\/campaigns\/[^/]+$/) !== null },
       ];
 
   const initials = email.slice(0, 2).toUpperCase();
@@ -174,8 +193,8 @@ export default function Sidebar({
               href={item.href}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                 active
-                  ? "bg-white/10 text-foreground"
-                  : "text-foreground-secondary hover:text-foreground hover:bg-white/5"
+                  ? "bg-foreground/10 text-foreground"
+                  : "text-foreground-secondary hover:text-foreground hover:bg-foreground/5"
               }`}
             >
               <item.icon />
@@ -188,7 +207,7 @@ export default function Sidebar({
         <button
           type="button"
           onClick={() => signOut({ callbackUrl: "/login" })}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-secondary hover:text-foreground hover:bg-white/5 transition-colors w-full"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-secondary hover:text-foreground hover:bg-foreground/5 transition-colors w-full"
         >
           <LogOutIcon />
           Log out
@@ -197,7 +216,7 @@ export default function Sidebar({
 
       {/* Campaign selector */}
       {campaigns.length > 0 && (
-        <div className="px-4 py-3 border-t border-white/10">
+        <div className="px-4 py-3 border-t border-border/50">
           <label
             htmlFor="sidebar-campaign"
             className="block text-xs font-medium text-foreground-muted mb-1.5"
@@ -220,8 +239,20 @@ export default function Sidebar({
         </div>
       )}
 
+      {/* Theme toggle */}
+      <div className="px-4 py-2 border-t border-border/50">
+        <button
+          type="button"
+          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-foreground-secondary hover:text-foreground hover:bg-foreground/5 transition-colors w-full"
+        >
+          {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+          {theme === "dark" ? "Light mode" : "Dark mode"}
+        </button>
+      </div>
+
       {/* User info */}
-      <div className="px-4 py-4 border-t border-white/10 flex items-center gap-3">
+      <div className="px-4 py-4 border-t border-border/50 flex items-center gap-3">
         <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold shrink-0">
           {initials}
         </div>

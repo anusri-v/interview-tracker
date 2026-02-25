@@ -151,14 +151,14 @@ export default function AssignInterviewModal({
                           already interviewed
                         </span>
                       )}
-                      {campaignType !== "experienced" && u.hasOngoing && (
+                      {u.hasOngoing && (
                         <span className="text-xs bg-blue-100 text-blue-700 border border-blue-300 rounded-full px-2 py-0.5 font-medium whitespace-nowrap">
-                          interview ongoing
+                          ongoing interview
                         </span>
                       )}
-                      {campaignType !== "experienced" && u.hasScheduled && !u.hasOngoing && (
+                      {u.hasScheduled && !u.hasOngoing && (
                         <span className="text-xs bg-purple-100 text-purple-700 border border-purple-300 rounded-full px-2 py-0.5 font-medium whitespace-nowrap">
-                          interview scheduled
+                          upcoming interview
                         </span>
                       )}
                     </span>

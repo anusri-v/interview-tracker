@@ -23,7 +23,7 @@ async function assignInterviewers(
     include: { campaign: { select: { status: true } } },
   });
   if (!candidate) redirect("/admin");
-  if (candidate.campaign.status === "completed") redirect(`/admin/campaigns/${candidate.campaignId}`);
+  if (candidate.campaign.status === "completed") redirect(`/admin/campaigns/${candidate.campaignId}/candidates`);
 
   const hasActiveInterview = await prisma.interview.findFirst({
     where: {
@@ -70,7 +70,7 @@ export default async function AssignInterviewersPage({
     }),
   ]);
   if (!candidate) notFound();
-  if (candidate.campaign.status === "completed") redirect(`/admin/campaigns/${candidate.campaignId}`);
+  if (candidate.campaign.status === "completed") redirect(`/admin/campaigns/${candidate.campaignId}/candidates`);
 
   const existingInterviewerIds = await prisma.interview
     .findMany({

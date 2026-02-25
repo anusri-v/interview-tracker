@@ -12,17 +12,20 @@ type Candidate = {
   college: string | null;
   department: string | null;
   resumeLink: string | null;
+  currentRole?: string | null;
 };
 
 export default function EditCandidateModal({
   open,
   onClose,
   candidate,
+  campaignType,
   updateCandidateDetails,
 }: {
   open: boolean;
   onClose: () => void;
   candidate: Candidate;
+  campaignType?: string;
   updateCandidateDetails: (candidateId: string, formData: FormData) => Promise<void>;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -66,6 +69,14 @@ export default function EditCandidateModal({
               className="w-full border border-border rounded px-3 py-2 bg-card text-foreground placeholder:text-foreground-muted" />
           </div>
         </div>
+        {campaignType === "experienced" && (
+        <div>
+          <label htmlFor="edit-currentRole" className="block text-sm font-medium mb-1 text-foreground">Current Role</label>
+          <input id="edit-currentRole" name="currentRole" type="text" defaultValue={candidate.currentRole ?? ""} placeholder="e.g. Software Engineer"
+            className="w-full border border-border rounded px-3 py-2 bg-card text-foreground placeholder:text-foreground-muted" />
+        </div>
+        )}
+        {campaignType !== "experienced" && (
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label htmlFor="edit-college" className="block text-sm font-medium mb-1 text-foreground">College</label>
@@ -78,6 +89,7 @@ export default function EditCandidateModal({
               className="w-full border border-border rounded px-3 py-2 bg-card text-foreground placeholder:text-foreground-muted" />
           </div>
         </div>
+        )}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} disabled={isPending}
             className="px-4 py-2 border border-border rounded-lg bg-card text-foreground hover:bg-surface disabled:opacity-50">

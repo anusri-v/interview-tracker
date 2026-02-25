@@ -9,16 +9,21 @@ type StatusFilter =
   | "selected"
   | "interview_scheduled"
   | "interview_ongoing"
+  | "no_show"
   | "all";
+
+type SortOption = "default" | "waiting";
 
 export default function CandidatesTableFilters({
   campaignId,
   search,
   statusFilter,
+  sort,
 }: {
   campaignId: string;
   search: string;
   statusFilter: StatusFilter;
+  sort: SortOption;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -26,10 +31,11 @@ export default function CandidatesTableFilters({
   const [searchValue, setSearchValue] = useState(search);
   useEffect(() => setSearchValue(search), [search]);
 
-  function updateFilters(newSearch: string, newStatus: StatusFilter) {
+  function updateFilters(newSearch: string, newStatus: StatusFilter, newSort: SortOption) {
     const params = new URLSearchParams();
     if (newSearch) params.set("search", newSearch);
     if (newStatus !== "all") params.set("status", newStatus);
+    if (newSort !== "default") params.set("sort", newSort);
     const q = params.toString();
     startTransition(() => {
       router.push(`${pathname}${q ? `?${q}` : ""}`);
@@ -57,10 +63,10 @@ export default function CandidatesTableFilters({
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
-              updateFilters(searchValue, statusFilter);
+              updateFilters(searchValue, statusFilter, sort);
             }
           }}
-          onBlur={() => updateFilters(searchValue, statusFilter)}
+          onBlur={() => updateFilters(searchValue, statusFilter, sort)}
           className="text-sm border border-border rounded-lg pl-9 pr-3 py-2.5 w-64 bg-card text-foreground placeholder:text-foreground-muted"
         />
       </div>
@@ -78,10 +84,7 @@ export default function CandidatesTableFilters({
           id="candidates-status"
           value={statusFilter}
           onChange={(e) =>
-            updateFilters(
-              searchValue,
-              e.target.value as StatusFilter
-            )
+            updateFilters(searchValue, e.target.value as StatusFilter, sort)
           }
           disabled={isPending}
           className="text-sm border border-border rounded-lg pl-9 pr-3 py-2.5 bg-card text-foreground appearance-none cursor-pointer"
@@ -92,6 +95,30 @@ export default function CandidatesTableFilters({
           <option value="interview_ongoing">Interview Ongoing</option>
           <option value="rejected">Rejected</option>
           <option value="selected">Selected</option>
+          <option value="no_show">No Show</option>
+        </select>
+      </div>
+      <div className="relative">
+        <svg
+          className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground-muted pointer-events-none"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5L7.5 3m0 0L12 7.5M7.5 3v13.5m13.5-3L16.5 18m0 0L12 13.5m4.5 4.5V4.5" />
+        </svg>
+        <select
+          id="candidates-sort"
+          value={sort}
+          onChange={(e) =>
+            updateFilters(searchValue, statusFilter, e.target.value as SortOption)
+          }
+          disabled={isPending}
+          className="text-sm border border-border rounded-lg pl-9 pr-3 py-2.5 bg-card text-foreground appearance-none cursor-pointer"
+        >
+          <option value="default">Newest First</option>
+          <option value="waiting">Longest Waiting</option>
         </select>
       </div>
     </div>

@@ -24,6 +24,11 @@ export default function NewCampaignButton({
       setError("Campaign name is required.");
       return;
     }
+    const type = (form.elements.namedItem("type") as HTMLSelectElement).value;
+    if (!type) {
+      setError("Campaign type is required.");
+      return;
+    }
     startTransition(async () => {
       await createCampaign(new FormData(form));
       setOpen(false);
@@ -78,6 +83,21 @@ export default function NewCampaignButton({
                   required
                   autoFocus
                 />
+              </div>
+              <div>
+                <label htmlFor="new-campaign-type" className="block text-sm font-medium mb-1.5 text-foreground">
+                  Campaign type
+                </label>
+                <select
+                  id="new-campaign-type"
+                  name="type"
+                  className="w-full border border-border rounded-lg px-3 py-2.5 bg-background text-foreground"
+                  required
+                >
+                  <option value="">Select type…</option>
+                  <option value="experienced">Experienced</option>
+                  <option value="fresher">Fresher</option>
+                </select>
               </div>
               {error && <p className="text-sm text-danger">{error}</p>}
               <div className="flex gap-3 justify-end pt-2">

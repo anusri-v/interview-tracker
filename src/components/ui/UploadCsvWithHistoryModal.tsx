@@ -102,7 +102,13 @@ export default function UploadCsvWithHistoryModal({
         return;
       }
       const rawHeaders = parseCsvLine(lines[0]).map((h) => h.trim());
-      const dataRows = lines.slice(1).map((l) => parseCsvLine(l));
+      const numCols = rawHeaders.length;
+      const dataRows = lines.slice(1).map((l) => {
+        const vals = parseCsvLine(l);
+        // Pad to header length so trailing empty columns are accessible
+        while (vals.length < numCols) vals.push("");
+        return vals;
+      });
       setHeaders(rawHeaders);
       setRows(dataRows);
 

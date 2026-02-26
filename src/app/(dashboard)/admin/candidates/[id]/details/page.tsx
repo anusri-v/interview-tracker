@@ -1,14 +1,42 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { auditLog } from "@/lib/audit";
 import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import StatusBadge from "@/components/ui/StatusBadge";
 import SkillRatingsDisplay from "@/components/ui/SkillRatingsDisplay";
 import AutoRefresh from "@/components/ui/AutoRefresh";
+import ReincludeButton from "./ReincludeButton";
 
 export const dynamic = "force-dynamic";
+
+async function reincludeInPipeline(candidateId: string) {
+  "use server";
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id || session.user.role !== "admin") redirect("/login");
+  const candidate = await prisma.candidate.findUnique({
+    where: { id: candidateId },
+    include: { campaign: { select: { status: true, id: true } } },
+  });
+  if (!candidate || candidate.status !== "rejected") return;
+  if (candidate.campaign.status === "completed") return;
+
+  await prisma.candidate.update({
+    where: { id: candidateId },
+    data: { status: "in_pipeline" },
+  });
+  await auditLog({
+    userId: session.user.id,
+    action: "candidate.reinclude",
+    entityType: "Candidate",
+    entityId: candidateId,
+    metadata: { campaignId: candidate.campaignId },
+  });
+  revalidatePath(`/admin/candidates/${candidateId}/details`);
+}
 
 export default async function CandidateDetailsPage({
   params,
@@ -54,7 +82,12 @@ export default async function CandidateDetailsPage({
 
       {/* Candidate Info Card */}
       <div className="border border-border rounded-xl bg-card p-6 text-foreground">
-        <h1 className="text-4xl font-bold tracking-tight">{candidate.name}</h1>
+        <div className="flex items-start justify-between flex-wrap gap-4">
+          <h1 className="text-4xl font-bold tracking-tight">{candidate.name}</h1>
+          {candidate.status === "rejected" && candidate.campaign?.status === "active" && (
+            <ReincludeButton candidateId={candidate.id} candidateName={candidate.name} reincludeInPipeline={reincludeInPipeline} />
+          )}
+        </div>
         <div className="mt-3 space-y-1">
           <p className="text-sm text-foreground-secondary">{candidate.email}</p>
           {candidate.phone && (

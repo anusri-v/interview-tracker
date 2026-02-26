@@ -83,6 +83,31 @@ async function reassignInterviewer(interviewId: string, formData: FormData) {
   revalidatePath(`/admin/campaigns/${interview.candidate.campaignId}/candidates/${interview.candidateId}`);
 }
 
+async function reincludeInPipeline(candidateId: string) {
+  "use server";
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id || session.user.role !== "admin") redirect("/login");
+  const candidate = await prisma.candidate.findUnique({
+    where: { id: candidateId },
+    include: { campaign: { select: { status: true, id: true } } },
+  });
+  if (!candidate || candidate.status !== "rejected") return;
+  if (candidate.campaign.status === "completed") return;
+
+  await prisma.candidate.update({
+    where: { id: candidateId },
+    data: { status: "in_pipeline" },
+  });
+  await auditLog({
+    userId: session.user.id,
+    action: "candidate.reinclude",
+    entityType: "Candidate",
+    entityId: candidateId,
+    metadata: { campaignId: candidate.campaignId },
+  });
+  revalidatePath(`/admin/campaigns/${candidate.campaignId}/candidates/${candidateId}`);
+}
+
 export default async function CandidateDetailPage({
   params,
 }: {
@@ -210,6 +235,7 @@ export default async function CandidateDetailPage({
       nextRound={completedInterviews.length + 1}
       assignInterviewer={assignInterviewer}
       reassignInterviewer={reassignInterviewer}
+      reincludeInPipeline={campaign.status === "active" && candidate.status === "rejected" ? reincludeInPipeline : undefined}
       campaignType={campaign.type}
       interviewerSlots={interviewerSlots.map((s) => ({
         id: s.id,

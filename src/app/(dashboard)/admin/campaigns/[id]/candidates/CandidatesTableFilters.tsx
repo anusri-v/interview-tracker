@@ -1,18 +1,26 @@
 "use client";
 
 import { useRouter, usePathname } from "next/navigation";
-import { useTransition, useState, useEffect } from "react";
+import { useTransition, useState, useEffect, useRef } from "react";
 
-type StatusFilter =
+type DisplayStatus =
   | "in_pipeline"
   | "rejected"
   | "selected"
   | "interview_scheduled"
   | "interview_ongoing"
-  | "no_show"
-  | "all";
+  | "no_show";
 
 type SortOption = "default" | "waiting";
+
+const STATUS_OPTIONS: { value: DisplayStatus; label: string }[] = [
+  { value: "in_pipeline", label: "In Pipeline" },
+  { value: "interview_scheduled", label: "Interview Scheduled" },
+  { value: "interview_ongoing", label: "Interview Ongoing" },
+  { value: "rejected", label: "Rejected" },
+  { value: "selected", label: "Selected" },
+  { value: "no_show", label: "No Show" },
+];
 
 export default function CandidatesTableFilters({
   campaignId,
@@ -23,7 +31,7 @@ export default function CandidatesTableFilters({
 }: {
   campaignId: string;
   search: string;
-  statusFilter: StatusFilter;
+  statusFilter: string;
   sort: SortOption;
   roundFilter?: string;
 }) {
@@ -36,10 +44,26 @@ export default function CandidatesTableFilters({
   const [currentRound, setCurrentRound] = useState(roundFilter);
   useEffect(() => setCurrentRound(roundFilter), [roundFilter]);
 
-  function updateFilters(newSearch: string, newStatus: StatusFilter, newSort: SortOption, newRound?: string) {
+  const selectedStatuses: DisplayStatus[] =
+    statusFilter === "all" ? [] : (statusFilter.split(",") as DisplayStatus[]);
+
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  function updateFilters(newSearch: string, newStatuses: DisplayStatus[], newSort: SortOption, newRound?: string) {
     const params = new URLSearchParams();
     if (newSearch) params.set("search", newSearch);
-    if (newStatus !== "all") params.set("status", newStatus);
+    if (newStatuses.length > 0) params.set("status", newStatuses.join(","));
     if (newSort !== "default") params.set("sort", newSort);
     const round = newRound ?? currentRound;
     if (round !== "all") params.set("round", round);
@@ -48,6 +72,20 @@ export default function CandidatesTableFilters({
       router.push(`${pathname}${q ? `?${q}` : ""}`);
     });
   }
+
+  function toggleStatus(status: DisplayStatus) {
+    const newStatuses = selectedStatuses.includes(status)
+      ? selectedStatuses.filter((s) => s !== status)
+      : [...selectedStatuses, status];
+    updateFilters(searchValue, newStatuses, sort);
+  }
+
+  const statusLabel =
+    selectedStatuses.length === 0
+      ? "All Statuses"
+      : selectedStatuses.length === 1
+        ? STATUS_OPTIONS.find((o) => o.value === selectedStatuses[0])?.label ?? selectedStatuses[0]
+        : `${selectedStatuses.length} statuses`;
 
   return (
     <div className="flex flex-wrap items-center gap-4">
@@ -70,40 +108,72 @@ export default function CandidatesTableFilters({
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
-              updateFilters(searchValue, statusFilter, sort);
+              updateFilters(searchValue, selectedStatuses, sort);
             }
           }}
-          onBlur={() => updateFilters(searchValue, statusFilter, sort)}
+          onBlur={() => updateFilters(searchValue, selectedStatuses, sort)}
           className="text-sm border border-border rounded-lg pl-9 pr-3 py-2.5 w-64 bg-card text-foreground placeholder:text-foreground-muted"
         />
       </div>
-      <div className="relative">
-        <svg
-          className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground-muted pointer-events-none"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={2}
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" />
-        </svg>
-        <select
-          id="candidates-status"
-          value={statusFilter}
-          onChange={(e) =>
-            updateFilters(searchValue, e.target.value as StatusFilter, sort)
-          }
+      <div className="relative" ref={dropdownRef}>
+        <button
+          type="button"
+          onClick={() => setDropdownOpen(!dropdownOpen)}
           disabled={isPending}
-          className="text-sm border border-border rounded-lg pl-9 pr-3 py-2.5 bg-card text-foreground appearance-none cursor-pointer"
+          className="text-sm border border-border rounded-lg pl-9 pr-3 py-2.5 bg-card text-foreground cursor-pointer inline-flex items-center gap-2 relative"
         >
-          <option value="all">All Statuses</option>
-          <option value="in_pipeline">In Pipeline</option>
-          <option value="interview_scheduled">Interview Scheduled</option>
-          <option value="interview_ongoing">Interview Ongoing</option>
-          <option value="rejected">Rejected</option>
-          <option value="selected">Selected</option>
-          <option value="no_show">No Show</option>
-        </select>
+          <svg
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground-muted pointer-events-none"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" />
+          </svg>
+          {statusLabel}
+          <svg className="w-3 h-3 text-foreground-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+          </svg>
+        </button>
+        {dropdownOpen && (
+          <div className="absolute top-full left-0 mt-1 z-20 bg-card border border-border rounded-lg shadow-lg py-1 min-w-[200px]">
+            {STATUS_OPTIONS.map((opt) => {
+              const isSelected = selectedStatuses.includes(opt.value);
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => toggleStatus(opt.value)}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-surface transition-colors flex items-center gap-2"
+                >
+                  <span className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
+                    isSelected ? "bg-primary border-primary" : "border-border"
+                  }`}>
+                    {isSelected && (
+                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                      </svg>
+                    )}
+                  </span>
+                  {opt.label}
+                </button>
+              );
+            })}
+            {selectedStatuses.length > 0 && (
+              <>
+                <div className="border-t border-border my-1" />
+                <button
+                  type="button"
+                  onClick={() => updateFilters(searchValue, [], sort)}
+                  className="w-full text-left px-3 py-2 text-sm text-foreground-muted hover:bg-surface transition-colors"
+                >
+                  Clear all
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
       <div className="relative">
         <svg
@@ -120,7 +190,7 @@ export default function CandidatesTableFilters({
           value={currentRound}
           onChange={(e) => {
             setCurrentRound(e.target.value);
-            updateFilters(searchValue, statusFilter, sort, e.target.value);
+            updateFilters(searchValue, selectedStatuses, sort, e.target.value);
           }}
           disabled={isPending}
           className="text-sm border border-border rounded-lg pl-9 pr-3 py-2.5 bg-card text-foreground appearance-none cursor-pointer"
@@ -147,7 +217,7 @@ export default function CandidatesTableFilters({
           id="candidates-sort"
           value={sort}
           onChange={(e) =>
-            updateFilters(searchValue, statusFilter, e.target.value as SortOption)
+            updateFilters(searchValue, selectedStatuses, e.target.value as SortOption)
           }
           disabled={isPending}
           className="text-sm border border-border rounded-lg pl-9 pr-3 py-2.5 bg-card text-foreground appearance-none cursor-pointer"

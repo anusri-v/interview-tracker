@@ -287,10 +287,11 @@ export default async function CampaignCandidatesPage({
 
   const { id } = await params;
   const { search = "", status: statusParam, page: pageParam, sort: sortParam, round: roundParam } = await searchParams;
-  const statusFilter: StatusFilter =
-    typeof statusParam === "string" && VALID_STATUS_FILTERS.includes(statusParam as StatusFilter)
-      ? (statusParam as StatusFilter)
-      : "all";
+  // Support comma-separated multi-status filter
+  const statusFilters: StatusFilter[] = typeof statusParam === "string"
+    ? statusParam.split(",").filter((s): s is StatusFilter => VALID_STATUS_FILTERS.includes(s as StatusFilter))
+    : [];
+  const statusFilter = statusFilters.length === 0 ? "all" : statusFilters.join(",");
   const searchTrimmed = typeof search === "string" ? search.trim() : "";
 
   const [campaign, interviewers, interviewerSlots] = await Promise.all([
@@ -406,8 +407,8 @@ export default async function CampaignCandidatesPage({
         c.college?.toLowerCase().includes(lower)
     );
   }
-  if (statusFilter !== "all") {
-    candidates = candidates.filter((c) => c.displayStatus === statusFilter);
+  if (statusFilters.length > 0) {
+    candidates = candidates.filter((c) => statusFilters.includes(c.displayStatus));
   }
   const roundFilter = roundParam && ["1", "2", "3", "4", "5"].includes(roundParam) ? roundParam : "all";
   if (roundFilter !== "all") {

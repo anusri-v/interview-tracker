@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import StatusBadge from "@/components/ui/StatusBadge";
 import AssignInterviewModal from "@/components/ui/AssignInterviewModal";
 import ReassignInterviewModal from "@/components/ui/ReassignInterviewModal";
 import EditFeedbackModal from "@/components/ui/EditFeedbackModal";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 type CandidateInfo = {
   id: string;
@@ -55,6 +56,7 @@ export default function CandidateDetailClient({
   nextRound,
   assignInterviewer,
   reassignInterviewer,
+  reincludeInPipeline,
   campaignType,
   interviewerSlots = [],
 }: {
@@ -70,10 +72,13 @@ export default function CandidateDetailClient({
   nextRound: number;
   assignInterviewer: (candidateId: string, formData: FormData) => Promise<void>;
   reassignInterviewer?: (interviewId: string, formData: FormData) => Promise<void>;
+  reincludeInPipeline?: (candidateId: string) => Promise<void>;
   campaignType?: string;
   interviewerSlots?: InterviewerSlot[];
 }) {
   useAutoRefresh(30000);
+  const [reincludePending, startReincludeTransition] = useTransition();
+  const [showReincludeConfirm, setShowReincludeConfirm] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [reassignInterview, setReassignInterview] = useState<ActiveInterview | null>(null);
   const [editFeedbackInterview, setEditFeedbackInterview] = useState<CompletedInterview | null>(null);
@@ -120,6 +125,14 @@ export default function CandidateDetailClient({
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
                 Assign Interview
+              </button>
+            )}
+            {reincludeInPipeline && candidate.status === "rejected" && (
+              <button
+                onClick={() => setShowReincludeConfirm(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors"
+              >
+                Re-include in Pipeline
               </button>
             )}
           </div>
@@ -279,6 +292,24 @@ export default function CandidateDetailClient({
           currentInterviewerName={reassignInterview.interviewerName}
           interviewers={interviewers}
           reassignInterviewer={reassignInterviewer}
+        />
+      )}
+
+      {/* Re-include Confirm Dialog */}
+      {reincludeInPipeline && (
+        <ConfirmDialog
+          open={showReincludeConfirm}
+          title="Re-include in Pipeline"
+          message={<>Are you sure you want to re-include <strong>{candidate.name}</strong> in the pipeline? Their existing feedback will be preserved.</>}
+          confirmLabel={reincludePending ? "Re-including..." : "Yes, re-include"}
+          onConfirm={() => {
+            startReincludeTransition(async () => {
+              await reincludeInPipeline(candidate.id);
+              setShowReincludeConfirm(false);
+            });
+          }}
+          onCancel={() => setShowReincludeConfirm(false)}
+          loading={reincludePending}
         />
       )}
 

@@ -3,8 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
-import StatusBadge from "@/components/ui/StatusBadge";
-import SkillRatingsDisplay from "@/components/ui/SkillRatingsDisplay";
+import InterviewerCandidateDetailClient from "./InterviewerCandidateDetailClient";
+import AutoRefresh from "@/components/ui/AutoRefresh";
 
 export default async function InterviewerCandidateDetailPage({
   params,
@@ -31,10 +31,32 @@ export default async function InterviewerCandidateDetailPage({
   });
   if (!candidate) notFound();
 
+  // Check if candidate has active interviews
+  const activeInterviewCount = await prisma.interview.count({
+    where: {
+      candidateId: id,
+      status: { in: ["scheduled", "ongoing"] },
+    },
+  });
+
   const isExperienced = candidate.campaign?.type === "experienced";
+
+  const interviewsData = candidate.interviews.map((i) => ({
+    id: i.id,
+    interviewerId: i.interviewerId,
+    interviewerName: i.interviewer.name ?? i.interviewer.email,
+    completedAt: i.completedAt?.toISOString() ?? null,
+    result: i.feedback?.result ?? null,
+    feedbackText: i.feedback?.feedback ?? null,
+    pointers: i.feedback?.pointersForNextInterviewer ?? null,
+    skillRatings: Array.isArray(i.feedback?.skillRatings)
+      ? (i.feedback!.skillRatings as Array<{ skill: string; rating: number }>)
+      : [],
+  }));
 
   return (
     <div className="space-y-8 max-w-2xl">
+      <AutoRefresh />
       <Link href={`/interviewer/campaigns/${candidate.campaignId}/candidates`} className="text-sm text-primary hover:text-primary-hover transition-colors">
         &larr; Back to candidates
       </Link>
@@ -61,49 +83,12 @@ export default async function InterviewerCandidateDetailPage({
         </div>
       </div>
 
-      <section>
-        <h2 className="text-xl font-bold mb-3 text-foreground tracking-tight">Past Interview Feedbacks</h2>
-        {candidate.interviews.length === 0 ? (
-          <p className="text-foreground-muted text-sm">No completed interviews yet.</p>
-        ) : (
-          <ul className="space-y-3">
-            {candidate.interviews.map((i) => (
-              <li key={i.id} className="border border-border rounded-xl bg-card p-4 text-sm text-foreground">
-                <div className="flex items-center justify-between">
-                  <p className="font-medium">{i.interviewer.name ?? i.interviewer.email}</p>
-                  <div className="flex items-center gap-3">
-                    {i.completedAt && (
-                      <span className="text-xs text-foreground-muted">
-                        {new Date(i.completedAt).toLocaleDateString("en-IN", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })}{" "}
-                        {new Date(i.completedAt).toLocaleTimeString("en-IN", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-                    )}
-                    {i.feedback && (
-                      <StatusBadge variant={i.feedback.result.toLowerCase() as any} />
-                    )}
-                  </div>
-                </div>
-                {i.feedback && (
-                  <>
-                    <p className="mt-2 text-foreground-secondary">{i.feedback.feedback}</p>
-                    <SkillRatingsDisplay skillRatings={i.feedback.skillRatings} />
-                    {i.feedback.pointersForNextInterviewer && (
-                      <p className="mt-1 text-foreground-muted">Pointers: {i.feedback.pointersForNextInterviewer}</p>
-                    )}
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <InterviewerCandidateDetailClient
+        candidateName={candidate.name}
+        interviews={interviewsData}
+        currentUserId={session.user.id}
+        hasActiveInterviews={activeInterviewCount > 0}
+      />
     </div>
   );
 }

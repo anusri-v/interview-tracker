@@ -57,10 +57,38 @@ export async function POST(
     currentRole: campaign.type === "fresher" ? "Fresher" : (c.currentRole?.trim() || null),
   }));
 
-  const created = await prisma.candidate.createMany({
-    data: mapped,
-    skipDuplicates: true,
+  // Find existing candidates by email or phone to identify duplicates
+  const emails = mapped.map((c) => c.email.toLowerCase());
+  const phones = mapped.filter((c) => c.phone).map((c) => c.phone!);
+  const existingByEmail = await prisma.candidate.findMany({
+    where: { campaignId, email: { in: emails, mode: "insensitive" } },
+    select: { email: true },
   });
+  const existingByPhone = phones.length > 0
+    ? await prisma.candidate.findMany({
+        where: { campaignId, phone: { in: phones } },
+        select: { phone: true },
+      })
+    : [];
+  const existingEmails = new Set(existingByEmail.map((c) => c.email.toLowerCase()));
+  const existingPhones = new Set(existingByPhone.map((c) => c.phone!));
+
+  const skippedCandidates: { name: string; email: string; reason: string }[] = [];
+  const toCreate = mapped.filter((c) => {
+    if (existingEmails.has(c.email.toLowerCase())) {
+      skippedCandidates.push({ name: c.name, email: c.email, reason: "Duplicate email" });
+      return false;
+    }
+    if (c.phone && existingPhones.has(c.phone)) {
+      skippedCandidates.push({ name: c.name, email: c.email, reason: "Duplicate phone" });
+      return false;
+    }
+    return true;
+  });
+
+  const created = toCreate.length > 0
+    ? await prisma.candidate.createMany({ data: toCreate, skipDuplicates: true })
+    : { count: 0 };
 
   // Check if any candidates have interview history
   const candidatesWithRounds = body.candidates.filter(
@@ -173,7 +201,8 @@ export async function POST(
   return NextResponse.json({
     created: created.count,
     total,
-    skipped: total - created.count,
+    skipped: skippedCandidates.length,
+    skippedCandidates: skippedCandidates.length > 0 ? skippedCandidates : undefined,
     interviewsCreated,
     warnings: warnings.length > 0 ? warnings : undefined,
   });

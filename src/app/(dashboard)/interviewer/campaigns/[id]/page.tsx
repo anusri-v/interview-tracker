@@ -51,13 +51,13 @@ export default async function InterviewerCampaignCandidatesPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ search?: string; status?: string; page?: string }>;
+  searchParams: Promise<{ search?: string; status?: string; page?: string; round?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/login");
 
   const { id } = await params;
-  const { search = "", status: statusParam, page: pageParam } = await searchParams;
+  const { search = "", status: statusParam, page: pageParam, round: roundParam } = await searchParams;
   const statusFilter: StatusFilter =
     typeof statusParam === "string" && VALID_STATUS_FILTERS.includes(statusParam as StatusFilter)
       ? (statusParam as StatusFilter)
@@ -105,11 +105,22 @@ export default async function InterviewerCampaignCandidatesPage({
     candidates = candidates.filter(
       (c) =>
         c.name.toLowerCase().includes(lower) ||
-        c.email.toLowerCase().includes(lower)
+        c.email.toLowerCase().includes(lower) ||
+        c.college?.toLowerCase().includes(lower)
     );
   }
   if (statusFilter !== "all") {
     candidates = candidates.filter((c) => c.displayStatus === statusFilter);
+  }
+  const roundFilter = roundParam && ["1", "2", "3", "4", "5"].includes(roundParam) ? roundParam : "all";
+  if (roundFilter !== "all") {
+    const roundNum = parseInt(roundFilter, 10);
+    candidates = candidates.filter((c) => {
+      const passedRounds = c.interviews.filter(
+        (i) => i.status === "completed" && i.feedback && (i.feedback.result === "HIRE" || i.feedback.result === "WEAK_HIRE")
+      ).length;
+      return passedRounds + 1 === roundNum;
+    });
   }
 
   const PAGE_SIZE = 20;
@@ -132,6 +143,7 @@ export default async function InterviewerCampaignCandidatesPage({
         interviewers={[]}
         search={searchTrimmed}
         statusFilter={statusFilter}
+        roundFilter={roundFilter}
         updateCandidateDetails={noop}
         updateCandidateStatus={noop}
         assignInterviewer={noop}

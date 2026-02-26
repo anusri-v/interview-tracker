@@ -19,11 +19,13 @@ export default function CandidatesTableFilters({
   search,
   statusFilter,
   sort,
+  roundFilter = "all",
 }: {
   campaignId: string;
   search: string;
   statusFilter: StatusFilter;
   sort: SortOption;
+  roundFilter?: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -31,11 +33,16 @@ export default function CandidatesTableFilters({
   const [searchValue, setSearchValue] = useState(search);
   useEffect(() => setSearchValue(search), [search]);
 
-  function updateFilters(newSearch: string, newStatus: StatusFilter, newSort: SortOption) {
+  const [currentRound, setCurrentRound] = useState(roundFilter);
+  useEffect(() => setCurrentRound(roundFilter), [roundFilter]);
+
+  function updateFilters(newSearch: string, newStatus: StatusFilter, newSort: SortOption, newRound?: string) {
     const params = new URLSearchParams();
     if (newSearch) params.set("search", newSearch);
     if (newStatus !== "all") params.set("status", newStatus);
     if (newSort !== "default") params.set("sort", newSort);
+    const round = newRound ?? currentRound;
+    if (round !== "all") params.set("round", round);
     const q = params.toString();
     startTransition(() => {
       router.push(`${pathname}${q ? `?${q}` : ""}`);
@@ -57,7 +64,7 @@ export default function CandidatesTableFilters({
         <input
           id="candidates-search"
           type="search"
-          placeholder="Search by name or email…"
+          placeholder="Search by name, email, or college…"
           value={searchValue}
           onChange={(e) => setSearchValue(e.target.value)}
           onKeyDown={(e) => {
@@ -96,6 +103,34 @@ export default function CandidatesTableFilters({
           <option value="rejected">Rejected</option>
           <option value="selected">Selected</option>
           <option value="no_show">No Show</option>
+        </select>
+      </div>
+      <div className="relative">
+        <svg
+          className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground-muted pointer-events-none"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" />
+        </svg>
+        <select
+          id="candidates-round"
+          value={currentRound}
+          onChange={(e) => {
+            setCurrentRound(e.target.value);
+            updateFilters(searchValue, statusFilter, sort, e.target.value);
+          }}
+          disabled={isPending}
+          className="text-sm border border-border rounded-lg pl-9 pr-3 py-2.5 bg-card text-foreground appearance-none cursor-pointer"
+        >
+          <option value="all">All Rounds</option>
+          <option value="1">Round 1</option>
+          <option value="2">Round 2</option>
+          <option value="3">Round 3</option>
+          <option value="4">Round 4</option>
+          <option value="5">Round 5</option>
         </select>
       </div>
       <div className="relative">

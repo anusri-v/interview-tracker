@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import StatusBadge from "@/components/ui/StatusBadge";
 import AssignInterviewModal from "@/components/ui/AssignInterviewModal";
+import ReassignInterviewModal from "@/components/ui/ReassignInterviewModal";
+import EditFeedbackModal from "@/components/ui/EditFeedbackModal";
 
 type CandidateInfo = {
   id: string;
@@ -24,16 +27,20 @@ type CompletedInterview = {
   result: string | null;
   feedbackText: string | null;
   pointers: string | null;
+  skillRatings: Array<{ skill: string; rating: number }>;
 };
 
 type ActiveInterview = {
   id: string;
+  interviewerId: string;
   interviewerName: string;
   status: string;
   scheduledAt: string | null;
 };
 
-type Interviewer = { id: string; name: string | null; email: string };
+type Interviewer = { id: string; name: string | null; email: string; hasOngoing?: boolean; hasScheduled?: boolean };
+
+type InterviewerSlot = { id: string; interviewerId: string; startTime: string };
 
 export default function CandidateDetailClient({
   campaignId,
@@ -47,6 +54,9 @@ export default function CandidateDetailClient({
   completedInterviewerIds,
   nextRound,
   assignInterviewer,
+  reassignInterviewer,
+  campaignType,
+  interviewerSlots = [],
 }: {
   campaignId: string;
   campaignName: string;
@@ -59,8 +69,14 @@ export default function CandidateDetailClient({
   completedInterviewerIds: string[];
   nextRound: number;
   assignInterviewer: (candidateId: string, formData: FormData) => Promise<void>;
+  reassignInterviewer?: (interviewId: string, formData: FormData) => Promise<void>;
+  campaignType?: string;
+  interviewerSlots?: InterviewerSlot[];
 }) {
+  useAutoRefresh(30000);
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [reassignInterview, setReassignInterview] = useState<ActiveInterview | null>(null);
+  const [editFeedbackInterview, setEditFeedbackInterview] = useState<CompletedInterview | null>(null);
 
   const displayStatus =
     candidate.status === "rejected"
@@ -156,11 +172,21 @@ export default function CandidateDetailClient({
                   </p>
                   {interview.scheduledAt && (
                     <p className="text-xs text-foreground-muted mt-1">
-                      Scheduled: {new Date(interview.scheduledAt).toLocaleString()}
+                      Scheduled: {new Date(interview.scheduledAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                     </p>
                   )}
                 </div>
-                <StatusBadge variant={interview.status as any} />
+                <div className="flex items-center gap-2">
+                  {reassignInterviewer && (
+                    <button
+                      onClick={() => setReassignInterview(interview)}
+                      className="px-3 py-1 text-xs font-medium rounded-lg border border-border text-foreground hover:bg-surface transition-colors"
+                    >
+                      Reassign
+                    </button>
+                  )}
+                  <StatusBadge variant={interview.status as any} />
+                </div>
               </div>
             ))}
           </div>
@@ -188,9 +214,19 @@ export default function CandidateDetailClient({
                       {interview.interviewerName}
                     </span>
                   </div>
-                  {interview.result && (
-                    <StatusBadge variant={interview.result.toLowerCase() as any} />
-                  )}
+                  <div className="flex items-center gap-2">
+                    {interview.result === "WEAK_HIRE" && activeInterviews.length === 0 && (
+                      <button
+                        onClick={() => setEditFeedbackInterview(interview)}
+                        className="px-3 py-1 text-xs font-medium rounded-lg border border-border text-foreground hover:bg-surface transition-colors"
+                      >
+                        Edit
+                      </button>
+                    )}
+                    {interview.result && (
+                      <StatusBadge variant={interview.result.toLowerCase() as any} />
+                    )}
+                  </div>
                 </div>
                 {interview.feedbackText && (
                   <div className="mb-2">
@@ -218,6 +254,34 @@ export default function CandidateDetailClient({
         )}
       </div>
 
+      {/* Edit Feedback Modal */}
+      {editFeedbackInterview && (
+        <EditFeedbackModal
+          open
+          onClose={() => setEditFeedbackInterview(null)}
+          interviewId={editFeedbackInterview.id}
+          candidateName={candidate.name}
+          currentResult={editFeedbackInterview.result ?? "WEAK_HIRE"}
+          currentFeedback={editFeedbackInterview.feedbackText ?? ""}
+          currentPointers={editFeedbackInterview.pointers}
+          currentSkillRatings={editFeedbackInterview.skillRatings}
+        />
+      )}
+
+      {/* Reassign Interview Modal */}
+      {reassignInterview && reassignInterviewer && (
+        <ReassignInterviewModal
+          open
+          onClose={() => setReassignInterview(null)}
+          interviewId={reassignInterview.id}
+          candidateName={candidate.name}
+          currentInterviewerId={reassignInterview.interviewerId}
+          currentInterviewerName={reassignInterview.interviewerName}
+          interviewers={interviewers}
+          reassignInterviewer={reassignInterviewer}
+        />
+      )}
+
       {/* Assign Interview Modal */}
       {showAssignModal && (
         <AssignInterviewModal
@@ -230,6 +294,8 @@ export default function CandidateDetailClient({
           existingInterviewerIds={existingInterviewerIds}
           completedInterviewerIds={completedInterviewerIds}
           assignInterviewer={assignInterviewer}
+          campaignType={campaignType}
+          interviewerSlots={interviewerSlots}
         />
       )}
     </div>

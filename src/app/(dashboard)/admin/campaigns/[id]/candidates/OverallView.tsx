@@ -16,16 +16,30 @@ export default function OverallView({
   const rejectedCandidates = candidates.filter((c) => c.status === "rejected");
 
   // Group pipeline candidates by round
-  // Round = completedInterviews.length + 1 (the round they're currently in)
+  // Round = completedInterviews with HIRE/WEAK_HIRE + 1 (the round they're currently in)
   const roundGroups: Record<number, CandidateWithInterviews[]> = {};
+  const rejectedInRound: Record<number, CandidateWithInterviews[]> = {};
   let maxRound = 0;
 
   for (const c of pipelineCandidates) {
-    const completedCount = c.interviews.filter((i) => i.status === "completed").length;
-    const round = completedCount + 1;
+    const passedRounds = c.interviews.filter(
+      (i) => i.status === "completed" && i.feedback && (i.feedback.result === "HIRE" || i.feedback.result === "WEAK_HIRE")
+    ).length;
+    const round = passedRounds + 1;
     if (round > maxRound) maxRound = round;
     if (!roundGroups[round]) roundGroups[round] = [];
     roundGroups[round].push(c);
+  }
+
+  // Group rejected candidates into their rejection round
+  for (const c of rejectedCandidates) {
+    const passedRounds = c.interviews.filter(
+      (i) => i.status === "completed" && i.feedback && (i.feedback.result === "HIRE" || i.feedback.result === "WEAK_HIRE")
+    ).length;
+    const round = passedRounds + 1;
+    if (round > maxRound) maxRound = round;
+    if (!rejectedInRound[round]) rejectedInRound[round] = [];
+    rejectedInRound[round].push(c);
   }
 
   // Ensure at least round 1 exists if there are pipeline candidates
@@ -36,13 +50,14 @@ export default function OverallView({
       {/* Round sections */}
       {Array.from({ length: maxRound }, (_, i) => i + 1).map((round) => {
         const roundCandidates = roundGroups[round] || [];
+        const rejectedHere = rejectedInRound[round] || [];
         return (
           <div key={round} className="border border-border rounded-lg p-4">
             <h3 className="text-sm font-semibold text-foreground mb-3">
               Round {round}
-              <span className="text-foreground-muted font-normal ml-2">({roundCandidates.length})</span>
+              <span className="text-foreground-muted font-normal ml-2">({roundCandidates.length + rejectedHere.length})</span>
             </h3>
-            {roundCandidates.length === 0 ? (
+            {roundCandidates.length === 0 && rejectedHere.length === 0 ? (
               <p className="text-sm text-foreground-muted">No candidates in this round.</p>
             ) : (
               <div className="flex flex-wrap gap-2">
@@ -64,6 +79,15 @@ export default function OverallView({
                     </Link>
                   );
                 })}
+                {rejectedHere.map((c) => (
+                  <Link
+                    key={c.id}
+                    href={`/admin/campaigns/${campaignId}/candidates/${c.id}`}
+                    className="border border-danger text-danger bg-transparent rounded-lg px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity line-through"
+                  >
+                    {c.name}
+                  </Link>
+                ))}
               </div>
             )}
           </div>
@@ -95,26 +119,6 @@ export default function OverallView({
         </div>
       )}
 
-      {/* Rejected Candidates */}
-      {rejectedCandidates.length > 0 && (
-        <div className="border border-danger/30 rounded-lg p-4">
-          <h3 className="text-sm font-semibold text-danger mb-3">
-            Rejected Candidates
-            <span className="text-foreground-muted font-normal ml-2">({rejectedCandidates.length})</span>
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            {rejectedCandidates.map((c) => (
-              <Link
-                key={c.id}
-                href={`/admin/campaigns/${campaignId}/candidates/${c.id}`}
-                className="border border-danger text-danger bg-transparent rounded-lg px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity"
-              >
-                {c.name}
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

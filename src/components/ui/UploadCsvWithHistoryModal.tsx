@@ -20,6 +20,7 @@ type UploadResult = {
   created: number;
   total: number;
   skipped: number;
+  skippedCandidates?: { name: string; email: string; reason: string }[];
   interviewsCreated?: number;
   warnings?: string[];
 };
@@ -309,6 +310,28 @@ export default function UploadCsvWithHistoryModal({
                   <p className="text-foreground-secondary mt-1">
                     {result.skipped} duplicate{result.skipped !== 1 ? "s" : ""} skipped.
                   </p>
+                )}
+                {result.skippedCandidates && result.skippedCandidates.length > 0 && (
+                  <div className="mt-2 max-h-32 overflow-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-left text-foreground-muted">
+                          <th className="pr-3 pb-1">Name</th>
+                          <th className="pr-3 pb-1">Email</th>
+                          <th className="pb-1">Reason</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-foreground-secondary">
+                        {result.skippedCandidates.map((c, i) => (
+                          <tr key={i}>
+                            <td className="pr-3 py-0.5">{c.name}</td>
+                            <td className="pr-3 py-0.5">{c.email}</td>
+                            <td className="py-0.5">{c.reason}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
                 {(result.interviewsCreated ?? 0) > 0 && (
                   <p className="text-foreground-secondary mt-1">

@@ -13,6 +13,8 @@ import AddCandidateModal from "@/components/ui/AddCandidateModal";
 import UploadCsvModal from "@/components/ui/UploadCsvModal";
 import UploadCsvWithHistoryModal from "@/components/ui/UploadCsvWithHistoryModal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import ReassignInterviewModal from "@/components/ui/ReassignInterviewModal";
+import { useAutoRefresh } from "@/lib/useAutoRefresh";
 
 export type CandidateWithInterviews = {
   id: string;
@@ -29,6 +31,7 @@ export type CandidateWithInterviews = {
     id: string;
     status: string;
     interviewerId: string;
+    interviewer?: { name: string | null; email: string };
     feedback: { result: string } | null;
   }[];
   displayStatus: string;
@@ -48,7 +51,8 @@ type ModalState =
   | { type: "uploadCsv" }
   | { type: "rescheduleNoShow"; candidate: CandidateWithInterviews }
   | { type: "rejectNoShow"; candidate: CandidateWithInterviews }
-  | { type: "cancelInterview"; candidate: CandidateWithInterviews };
+  | { type: "cancelInterview"; candidate: CandidateWithInterviews }
+  | { type: "reassign"; interviewId: string; candidate: CandidateWithInterviews };
 
 export default function CandidatesPageClient({
   campaignId,
@@ -68,10 +72,12 @@ export default function CandidatesPageClient({
   totalPages = 1,
   totalFiltered = 0,
   interviewerSlots = [],
+  reassignInterviewer,
   cancelScheduledInterview,
   rescheduleNoShow,
   rejectNoShow,
   sort = "default",
+  roundFilter = "all",
 }: {
   campaignId: string;
   campaignType: string;
@@ -90,14 +96,17 @@ export default function CandidatesPageClient({
   currentPage?: number;
   totalPages?: number;
   totalFiltered?: number;
+  reassignInterviewer?: (interviewId: string, formData: FormData) => Promise<void>;
   cancelScheduledInterview?: (candidateId: string) => Promise<void>;
   rescheduleNoShow?: (candidateId: string) => Promise<void>;
   rejectNoShow?: (candidateId: string) => Promise<void>;
   sort?: string;
+  roundFilter?: string;
 }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
+  useAutoRefresh(30000);
 
   const view = searchParams.get("view") === "overall" ? "overall" : "table";
   const [modal, setModal] = useState<ModalState>({ type: "none" });
@@ -235,6 +244,7 @@ export default function CandidatesPageClient({
             search={search}
             statusFilter={statusFilter as any}
             sort={sort as any}
+            roundFilter={roundFilter}
           />
 
           {candidates.length === 0 ? (
@@ -371,6 +381,24 @@ export default function CandidatesPageClient({
                                 </svg>
                               </button>
                             )}
+                            {/* Reassign interview — for scheduled/ongoing */}
+                            {(c.displayStatus === "interview_scheduled" || c.displayStatus === "interview_ongoing") && (() => {
+                              const activeInterview = c.interviews.find(
+                                (i) => i.status === "scheduled" || i.status === "ongoing"
+                              );
+                              if (!activeInterview) return null;
+                              return (
+                                <button
+                                  onClick={() => setModal({ type: "reassign", interviewId: activeInterview.id, candidate: c })}
+                                  className="text-foreground-secondary hover:text-primary transition-colors"
+                                  title="Reassign Interview"
+                                >
+                                  <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+                                  </svg>
+                                </button>
+                              );
+                            })()}
                             {/* Cancel scheduled interview — experienced campaigns only */}
                             {isExperienced && c.displayStatus === "interview_scheduled" && (
                               <button
@@ -407,11 +435,13 @@ export default function CandidatesPageClient({
           )}
 
           {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between pt-2">
-              <p className="text-sm text-foreground-muted">
-                Showing {(currentPage - 1) * 20 + 1}–{Math.min(currentPage * 20, totalFiltered)} of {totalFiltered}
-              </p>
+          <div className="flex items-center justify-between pt-2">
+            <p className="text-sm text-foreground-muted">
+              {totalFiltered <= 20
+                ? `Showing ${totalFiltered} candidate${totalFiltered !== 1 ? "s" : ""}`
+                : `Showing ${(currentPage - 1) * 20 + 1}–${Math.min(currentPage * 20, totalFiltered)} of ${totalFiltered}`}
+            </p>
+            {totalPages > 1 && (
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => goToPage(currentPage - 1)}
@@ -431,8 +461,8 @@ export default function CandidatesPageClient({
                   Next →
                 </button>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </>
       )}
 
@@ -499,6 +529,26 @@ export default function CandidatesPageClient({
               />
             )
           )}
+          {modal.type === "reassign" && reassignInterviewer && (() => {
+            const activeInterview = modal.candidate.interviews.find(
+              (i) => i.id === modal.interviewId
+            );
+            const currentInterviewerName = activeInterview?.interviewer
+              ? (activeInterview.interviewer.name || activeInterview.interviewer.email)
+              : interviewers.find((u) => u.id === activeInterview?.interviewerId)?.name || "Unknown";
+            return (
+              <ReassignInterviewModal
+                open
+                onClose={closeModal}
+                interviewId={modal.interviewId}
+                candidateName={modal.candidate.name}
+                currentInterviewerId={activeInterview?.interviewerId ?? ""}
+                currentInterviewerName={currentInterviewerName}
+                interviewers={interviewers}
+                reassignInterviewer={reassignInterviewer}
+              />
+            );
+          })()}
           {modal.type === "cancelInterview" && (
             <ConfirmDialog
               open

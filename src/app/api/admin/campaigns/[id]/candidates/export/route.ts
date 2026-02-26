@@ -41,7 +41,12 @@ export async function GET(
       candidates: {
         orderBy: { createdAt: "desc" },
         include: {
-          interviews: { select: { status: true } },
+          interviews: {
+            select: {
+              status: true,
+              feedback: { select: { result: true } },
+            },
+          },
         },
       },
     },
@@ -60,11 +65,19 @@ export async function GET(
     "status",
     "current_role",
     "hired_role",
+    "round",
   ];
   const headerLine = headers.join(",");
 
   const rows = campaign.candidates.map((c) => {
     const displayStatus = getDisplayStatus(c);
+    const completedPassed = c.interviews.filter(
+      (i) =>
+        i.status === "completed" &&
+        i.feedback &&
+        (i.feedback.result === "HIRE" || i.feedback.result === "WEAK_HIRE")
+    ).length;
+    const round = completedPassed + 1;
     return [
       escapeCsvCell(c.name),
       escapeCsvCell(c.email),
@@ -74,6 +87,7 @@ export async function GET(
       escapeCsvCell(displayStatus),
       escapeCsvCell(c.currentRole),
       escapeCsvCell(c.hiredRole),
+      escapeCsvCell(String(round)),
     ].join(",");
   });
 

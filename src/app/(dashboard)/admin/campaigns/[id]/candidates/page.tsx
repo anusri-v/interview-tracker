@@ -180,6 +180,45 @@ async function createCandidate(campaignId: string, formData: FormData) {
   revalidatePath(`/admin/campaigns/${campaignId}/candidates`);
 }
 
+async function reassignInterviewer(interviewId: string, formData: FormData) {
+  "use server";
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id || session.user.role !== "admin") redirect("/login");
+  const newInterviewerId = formData.get("interviewerId") as string;
+  if (!newInterviewerId) return;
+  const interview = await prisma.interview.findUnique({
+    where: { id: interviewId },
+    include: { candidate: { select: { id: true, campaignId: true, campaign: { select: { status: true } } } } },
+  });
+  if (!interview) return;
+  if (interview.candidate.campaign.status === "completed") return;
+  if (interview.status !== "scheduled" && interview.status !== "ongoing") return;
+
+  // Check if new interviewer already has an interview with this candidate
+  const existing = await prisma.interview.findUnique({
+    where: {
+      candidateId_interviewerId: {
+        candidateId: interview.candidateId,
+        interviewerId: newInterviewerId,
+      },
+    },
+  });
+  if (existing) return; // Can't reassign — would violate unique constraint
+
+  await prisma.interview.update({
+    where: { id: interviewId },
+    data: { interviewerId: newInterviewerId },
+  });
+  await auditLog({
+    userId: session.user.id,
+    action: "interview.reassign",
+    entityType: "Interview",
+    entityId: interviewId,
+    metadata: { candidateId: interview.candidateId, fromInterviewerId: interview.interviewerId, toInterviewerId: newInterviewerId },
+  });
+  revalidatePath(`/admin/campaigns/${interview.candidate.campaignId}/candidates`);
+}
+
 async function cancelScheduledInterview(candidateId: string) {
   "use server";
   const session = await getServerSession(authOptions);
@@ -241,13 +280,13 @@ export default async function CampaignCandidatesPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ search?: string; status?: string; view?: string; page?: string; sort?: string }>;
+  searchParams: Promise<{ search?: string; status?: string; view?: string; page?: string; sort?: string; round?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || session.user.role !== "admin") redirect("/login");
 
   const { id } = await params;
-  const { search = "", status: statusParam, page: pageParam, sort: sortParam } = await searchParams;
+  const { search = "", status: statusParam, page: pageParam, sort: sortParam, round: roundParam } = await searchParams;
   const statusFilter: StatusFilter =
     typeof statusParam === "string" && VALID_STATUS_FILTERS.includes(statusParam as StatusFilter)
       ? (statusParam as StatusFilter)
@@ -363,11 +402,22 @@ export default async function CampaignCandidatesPage({
     candidates = candidates.filter(
       (c) =>
         c.name.toLowerCase().includes(lower) ||
-        c.email.toLowerCase().includes(lower)
+        c.email.toLowerCase().includes(lower) ||
+        c.college?.toLowerCase().includes(lower)
     );
   }
   if (statusFilter !== "all") {
     candidates = candidates.filter((c) => c.displayStatus === statusFilter);
+  }
+  const roundFilter = roundParam && ["1", "2", "3", "4", "5"].includes(roundParam) ? roundParam : "all";
+  if (roundFilter !== "all") {
+    const roundNum = parseInt(roundFilter, 10);
+    candidates = candidates.filter((c) => {
+      const passedRounds = c.interviews.filter(
+        (i) => i.status === "completed" && i.feedback && (i.feedback.result === "HIRE" || i.feedback.result === "WEAK_HIRE")
+      ).length;
+      return passedRounds + 1 === roundNum;
+    });
   }
 
   const isActive = campaign.status === "active";
@@ -393,10 +443,12 @@ export default async function CampaignCandidatesPage({
       search={searchTrimmed}
       statusFilter={statusFilter}
       sort={sortByWaiting ? "waiting" : "default"}
+      roundFilter={roundFilter}
       updateCandidateDetails={updateCandidateDetails}
       updateCandidateStatus={updateCandidateStatus}
       assignInterviewer={assignInterviewer}
       createCandidate={createCandidate}
+      reassignInterviewer={reassignInterviewer}
       cancelScheduledInterview={cancelScheduledInterview}
       rescheduleNoShow={rescheduleNoShow}
       rejectNoShow={rejectNoShow}

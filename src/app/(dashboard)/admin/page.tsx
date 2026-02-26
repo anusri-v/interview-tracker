@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/db";
 import { getDefaultCampaignId } from "@/lib/campaigns";
 import StatusBadge from "@/components/ui/StatusBadge";
+import Link from "next/link";
+import AutoRefresh from "@/components/ui/AutoRefresh";
 
 type SearchParams = { campaignId?: string | string[] };
 
@@ -69,29 +71,50 @@ export default async function AdminDashboardPage({
     }),
   ]);
 
+  const candidatesWithInterviews = await prisma.candidate.findMany({
+    where: { campaignId: selectedCampaign.id },
+    select: {
+      id: true,
+      status: true,
+      createdAt: true,
+      interviews: {
+        select: {
+          createdAt: true,
+          completedAt: true,
+          status: true,
+          feedback: { select: { result: true } },
+        },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+
+  // Compute candidates per round (in_pipeline only)
+  const candidatesPerRound: { round: number; count: number }[] = [];
+  {
+    const roundCounts: Record<number, number> = {};
+    for (const candidate of candidatesWithInterviews) {
+      if (candidate.status !== "in_pipeline") continue;
+      const passedRounds = candidate.interviews.filter(
+        (i) =>
+          i.status === "completed" &&
+          i.feedback &&
+          (i.feedback.result === "HIRE" || i.feedback.result === "WEAK_HIRE")
+      ).length;
+      const round = passedRounds + 1;
+      roundCounts[round] = (roundCounts[round] ?? 0) + 1;
+    }
+    for (const [round, count] of Object.entries(roundCounts)) {
+      candidatesPerRound.push({ round: Number(round), count });
+    }
+    candidatesPerRound.sort((a, b) => a.round - b.round);
+  }
+
   // Fresher analytics data
   let avgWaitingTime: string | null = null;
   let rejectionsPerRound: { round: number; count: number }[] = [];
 
   if (isFresher) {
-    const candidatesWithInterviews = await prisma.candidate.findMany({
-      where: { campaignId: selectedCampaign.id },
-      select: {
-        id: true,
-        status: true,
-        createdAt: true,
-        interviews: {
-          select: {
-            createdAt: true,
-            completedAt: true,
-            status: true,
-            feedback: { select: { result: true } },
-          },
-          orderBy: { createdAt: "asc" },
-        },
-      },
-    });
-
     // Compute average waiting time
     const now = Date.now();
     const allWaits: number[] = [];
@@ -125,8 +148,10 @@ export default async function AdminDashboardPage({
       const avg = allWaits.reduce((s, w) => s + w, 0) / allWaits.length;
       avgWaitingTime = formatDuration(avg);
     }
+  }
 
-    // Compute rejections per round
+  // Compute rejections per round (all campaign types)
+  {
     const roundCounts: Record<number, number> = {};
     for (const candidate of candidatesWithInterviews) {
       if (candidate.status !== "rejected") continue;
@@ -135,7 +160,6 @@ export default async function AdminDashboardPage({
         .filter((i) => i.feedback)
         .map((i) => i.feedback!.result);
 
-      // Count positive rounds (HIRE/WEAK_HIRE) before the NO_HIRE
       const positiveRounds = feedbacks.filter(
         (r) => r === "HIRE" || r === "WEAK_HIRE"
       ).length;
@@ -178,6 +202,7 @@ export default async function AdminDashboardPage({
 
   return (
     <div className="space-y-14">
+      <AutoRefresh />
       <div>
         <h1 className="text-4xl font-bold text-foreground tracking-tight">Dashboard</h1>
         <p className="mt-1 text-sm text-foreground-muted">
@@ -203,7 +228,45 @@ export default async function AdminDashboardPage({
         ))}
       </section>
 
-      {isFresher && rejectionsPerRound.length > 0 && (
+      {candidatesPerRound.length > 0 && (
+        <section>
+          <h2 className="text-xl font-bold text-foreground tracking-tight mb-4">Candidates Per Round</h2>
+          <div className="rounded-xl border border-border overflow-hidden bg-card">
+            <table className="w-full text-base border-collapse">
+              <thead>
+                <tr className="bg-surface">
+                  <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">
+                    Round
+                  </th>
+                  <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">
+                    Candidates
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {candidatesPerRound.map(({ round, count }) => (
+                  <tr
+                    key={round}
+                    className="border-b border-border last:border-0 hover:bg-surface/50 transition-colors"
+                  >
+                    <td className="px-5 py-4" colSpan={2}>
+                      <Link
+                        href={`/admin/campaigns/${selectedCampaign.id}/candidates?status=in_pipeline&round=${round}`}
+                        className="flex justify-between text-primary hover:text-primary-hover transition-colors"
+                      >
+                        <span className="font-medium">Round {round}</span>
+                        <span>{count}</span>
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {rejectionsPerRound.length > 0 && (
         <section>
           <h2 className="text-xl font-bold text-foreground tracking-tight mb-4">Rejections Per Round</h2>
           <div className="rounded-xl border border-border overflow-hidden bg-card">
@@ -224,8 +287,15 @@ export default async function AdminDashboardPage({
                     key={round}
                     className="border-b border-border last:border-0 hover:bg-surface/50 transition-colors"
                   >
-                    <td className="px-5 py-4 text-foreground font-medium">Round {round}</td>
-                    <td className="px-5 py-4 text-foreground-secondary">{count}</td>
+                    <td className="px-5 py-4" colSpan={2}>
+                      <Link
+                        href={`/admin/campaigns/${selectedCampaign.id}/candidates?status=rejected&round=${round}`}
+                        className="flex justify-between text-primary hover:text-primary-hover transition-colors"
+                      >
+                        <span className="font-medium">Round {round}</span>
+                        <span>{count}</span>
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>

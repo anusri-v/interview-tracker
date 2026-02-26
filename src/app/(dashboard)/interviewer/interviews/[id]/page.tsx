@@ -5,8 +5,11 @@ import { prisma } from "@/lib/db";
 import Link from "next/link";
 import StartInterviewButton from "./StartInterviewButton";
 import CompleteInterviewForm from "./CompleteInterviewForm";
+import EditFeedbackForm from "./EditFeedbackForm";
+import InterviewTimer from "./InterviewTimer";
 import StatusBadge from "@/components/ui/StatusBadge";
 import SkillRatingsDisplay from "@/components/ui/SkillRatingsDisplay";
+import AutoRefresh from "@/components/ui/AutoRefresh";
 
 export default async function InterviewDetailPage({
   params,
@@ -39,9 +42,22 @@ export default async function InterviewDetailPage({
 
   if (!interview || interview.interviewerId !== session.user.id) notFound();
 
+  // Check if candidate has active interviews (for edit feedback eligibility)
+  const activeInterviewCount = await prisma.interview.count({
+    where: {
+      candidateId: interview.candidateId,
+      status: { in: ["scheduled", "ongoing"] },
+    },
+  });
+
   const campaignType = interview.candidate.campaign?.type;
   const isExperienced = campaignType === "experienced";
   const feedbackResult = interview.feedback?.result;
+  const canEditFeedback =
+    interview.status === "completed" &&
+    interview.feedback?.result === "WEAK_HIRE" &&
+    activeInterviewCount === 0;
+
   let feedbackVariant: "hire" | "no_hire" | "weak_hire" | "no_show" | undefined;
   if (feedbackResult === "HIRE") feedbackVariant = "hire";
   else if (feedbackResult === "NO_HIRE") feedbackVariant = "no_hire";
@@ -50,6 +66,7 @@ export default async function InterviewDetailPage({
 
   return (
     <div className="space-y-8 max-w-2xl">
+      <AutoRefresh />
       <Link href="/interviewer/interviews" className="text-sm text-primary hover:text-primary-hover transition-colors">
         ← My interviews
       </Link>
@@ -72,7 +89,7 @@ export default async function InterviewDetailPage({
             </p>
           )}
           <p className="text-sm text-foreground-secondary mt-2">
-            Scheduled: {new Date(interview.scheduledAt).toLocaleString()} ·{" "}
+            Scheduled: {new Date(interview.scheduledAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })} ·{" "}
             <StatusBadge variant={interview.status as any} />
           </p>
         </div>
@@ -109,7 +126,12 @@ export default async function InterviewDetailPage({
       )}
 
       {interview.status === "ongoing" && (
-        <CompleteInterviewForm interviewId={interview.id} campaignType={campaignType} />
+        <>
+          {interview.startedAt && (
+            <InterviewTimer startedAt={interview.startedAt.toISOString()} />
+          )}
+          <CompleteInterviewForm interviewId={interview.id} campaignType={campaignType} />
+        </>
       )}
 
       {interview.status === "completed" && interview.feedback && (
@@ -127,6 +149,20 @@ export default async function InterviewDetailPage({
             </p>
           )}
         </div>
+      )}
+
+      {canEditFeedback && interview.feedback && (
+        <EditFeedbackForm
+          interviewId={interview.id}
+          currentResult={interview.feedback.result}
+          currentFeedback={interview.feedback.feedback ?? ""}
+          currentPointers={interview.feedback.pointersForNextInterviewer}
+          currentSkillRatings={
+            Array.isArray(interview.feedback.skillRatings)
+              ? (interview.feedback.skillRatings as Array<{ skill: string; rating: number }>)
+              : []
+          }
+        />
       )}
     </div>
   );

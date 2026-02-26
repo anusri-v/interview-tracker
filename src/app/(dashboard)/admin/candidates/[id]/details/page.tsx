@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import StatusBadge from "@/components/ui/StatusBadge";
 import SkillRatingsDisplay from "@/components/ui/SkillRatingsDisplay";
+import AutoRefresh from "@/components/ui/AutoRefresh";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,7 @@ export default async function CandidateDetailsPage({
 
   return (
     <div className="space-y-8 max-w-2xl">
+      <AutoRefresh />
       <Link
         href={`/admin/campaigns/${candidate.campaignId}/candidates`}
         className="text-sm text-primary hover:text-primary-hover transition-colors"
@@ -113,11 +115,13 @@ export default async function CandidateDetailsPage({
                     {interview.scheduledAt && (
                       <span className="text-xs text-foreground-muted">
                         {new Date(interview.scheduledAt).toLocaleDateString("en-IN", {
+                          timeZone: "Asia/Kolkata",
                           day: "numeric",
                           month: "short",
                           year: "numeric",
                         })}{" "}
                         {new Date(interview.scheduledAt).toLocaleTimeString("en-IN", {
+                          timeZone: "Asia/Kolkata",
                           hour: "2-digit",
                           minute: "2-digit",
                         })}
@@ -158,11 +162,13 @@ export default async function CandidateDetailsPage({
                     {interview.completedAt && (
                       <span className="text-xs text-foreground-muted">
                         {new Date(interview.completedAt).toLocaleDateString("en-IN", {
+                          timeZone: "Asia/Kolkata",
                           day: "numeric",
                           month: "short",
                           year: "numeric",
                         })}{" "}
                         {new Date(interview.completedAt).toLocaleTimeString("en-IN", {
+                          timeZone: "Asia/Kolkata",
                           hour: "2-digit",
                           minute: "2-digit",
                         })}

@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getDefaultCampaignId } from "@/lib/campaigns";
 import Link from "next/link";
+import AutoRefresh from "@/components/ui/AutoRefresh";
 
 type SearchParams = { campaignId?: string | string[] };
 
@@ -72,6 +73,7 @@ export default async function InterviewerDashboardPage({
 
   return (
     <div className="space-y-14">
+      <AutoRefresh />
       <div>
         <h1 className="text-4xl font-bold text-foreground tracking-tight">Dashboard</h1>
         {campaign && (
@@ -105,7 +107,7 @@ export default async function InterviewerDashboardPage({
                     {i.candidate.name}
                   </Link>
                   <span className="text-xs text-foreground-muted">
-                    {new Date(i.scheduledAt).toLocaleString()} · {i.status}
+                    {new Date(i.scheduledAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · {i.status}
                   </span>
                 </li>
               ))}

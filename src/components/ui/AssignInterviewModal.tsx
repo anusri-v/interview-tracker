@@ -68,11 +68,14 @@ export default function AssignInterviewModal({
 
   function formatSlotChip(iso: string) {
     const d = new Date(iso);
-    const date = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    const h = d.getHours();
-    const hr = h === 0 || h === 12 ? 12 : h > 12 ? h - 12 : h;
-    const ampm = h >= 12 ? "PM" : "AM";
-    return `${date}, ${hr} ${ampm}`;
+    return d.toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -120,7 +123,7 @@ export default function AssignInterviewModal({
                 return (
                   <label
                     key={u.id}
-                    className={`flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-surface/50 transition-colors ${
+                    className={`flex items-center gap-3 flex-wrap px-3 py-2 cursor-pointer hover:bg-surface/50 transition-colors ${
                       selectedId === u.id ? "bg-surface" : ""
                     }`}
                   >

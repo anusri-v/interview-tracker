@@ -17,6 +17,9 @@ enum CandidateStatus {
   in_pipeline
   selected
   no_show
+  dropped
+  offer_in_process
+  offer_accepted
 }
 
 enum InterviewStatus {
@@ -38,7 +41,7 @@ enum CampaignStatus {
 }
 
 enum CampaignType {
-  experienced
+  lateral
   fresher
 }
 
@@ -90,6 +93,14 @@ model Candidate {
   status      CandidateStatus @default(in_pipeline)
   hiredRole   String?        // role when selected/hired (e.g. "SDE", "QA")
   currentRole String?        // current/previous role (e.g. "Software Engineer")
+  dateFirstSpoken DateTime?
+  source      String?        // "Employee Referral", "Online", "Vendor"
+  yearsOfExperience Float?
+  company     String?
+  location    String?
+  currentCtc  String?
+  expectedCtc String?
+  dropReason  String?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
   interviews  Interview[]
@@ -113,6 +124,7 @@ model Interview {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   feedback     Feedback?
+  interviewerSlot InterviewerSlot?
 
   @@index([candidateId, interviewerId])
   @@index([interviewerId, status])
@@ -132,13 +144,15 @@ model Feedback {
 }
 
 model InterviewerSlot {
-  id            String   @id @default(cuid())
+  id            String     @id @default(cuid())
   interviewerId String
-  interviewer   User     @relation("InterviewerSlots", fields: [interviewerId], references: [id], onDelete: Cascade)
+  interviewer   User       @relation("InterviewerSlots", fields: [interviewerId], references: [id], onDelete: Cascade)
   campaignId    String
-  campaign      Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaign      Campaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   startTime     DateTime
-  createdAt     DateTime @default(now())
+  interviewId   String?    @unique
+  interview     Interview? @relation(fields: [interviewId], references: [id], onDelete: SetNull)
+  createdAt     DateTime   @default(now())
 
   @@unique([interviewerId, campaignId, startTime])
   @@index([campaignId, interviewerId])

@@ -20,10 +20,38 @@ export async function POST(
   if (interview.status !== "scheduled") {
     return NextResponse.json({ error: "Interview not in scheduled state" }, { status: 400 });
   }
-  await prisma.interview.update({
-    where: { id },
-    data: { status: "ongoing", startedAt: new Date() },
-  });
+
+  const now = new Date();
+
+  // Panel flow: if this interview has a panelGroupId, start all siblings
+  if (interview.panelGroupId) {
+    // Check if any sibling is already ongoing
+    const ongoingSibling = await prisma.interview.findFirst({
+      where: {
+        panelGroupId: interview.panelGroupId,
+        status: "ongoing",
+      },
+    });
+    if (ongoingSibling) {
+      return NextResponse.json(
+        { error: "already_started", startedAt: ongoingSibling.startedAt?.toISOString() },
+        { status: 409 }
+      );
+    }
+
+    // Start all interviews in the panel group
+    await prisma.interview.updateMany({
+      where: { panelGroupId: interview.panelGroupId, status: "scheduled" },
+      data: { status: "ongoing", startedAt: now },
+    });
+  } else {
+    // Solo flow
+    await prisma.interview.update({
+      where: { id },
+      data: { status: "ongoing", startedAt: now },
+    });
+  }
+
   await auditLog({ userId: session.user.id, action: "interview.start", entityType: "Interview", entityId: id });
   return NextResponse.json({ ok: true });
 }

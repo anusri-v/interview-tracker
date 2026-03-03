@@ -42,6 +42,11 @@ enum CampaignType {
   fresher
 }
 
+enum InterviewMode {
+  online
+  offline
+}
+
 model User {
   id            String    @id @default(cuid())
   email         String    @unique
@@ -54,6 +59,8 @@ model User {
   interviewsConducted Interview[]
   availabilitySlots InterviewerSlot[] @relation("InterviewerSlots")
   auditLogs         AuditLog[]
+  campaignSettings  InterviewerCampaignSetting[] @relation("InterviewerCampaignSettings")
+  panelFeedbackSubmissions PanelFeedback[] @relation("PanelFeedbackSubmissions")
 }
 
 model Campaign {
@@ -67,6 +74,7 @@ model Campaign {
   updatedAt   DateTime       @updatedAt
   candidates  Candidate[]
   interviewerSlots InterviewerSlot[]
+  interviewerSettings InterviewerCampaignSetting[]
 }
 
 model Candidate {
@@ -101,13 +109,15 @@ model Interview {
   status       InterviewStatus @default(scheduled)
   startedAt    DateTime?
   completedAt  DateTime?
+  panelGroupId String?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   feedback     Feedback?
 
-  @@unique([candidateId, interviewerId])
+  @@index([candidateId, interviewerId])
   @@index([interviewerId, status])
   @@index([candidateId])
+  @@index([panelGroupId])
 }
 
 model Feedback {
@@ -147,4 +157,31 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([userId])
   @@index([action])
+}
+
+model InterviewerCampaignSetting {
+  id            String         @id @default(cuid())
+  interviewerId String
+  interviewer   User           @relation("InterviewerCampaignSettings", fields: [interviewerId], references: [id], onDelete: Cascade)
+  campaignId    String
+  campaign      Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  mode          InterviewMode?
+  roomNumber    String?
+  meetLink      String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@unique([interviewerId, campaignId])
+}
+
+model PanelFeedback {
+  id                         String          @id @default(cuid())
+  panelGroupId               String          @unique
+  result                     InterviewResult
+  feedback                   String?
+  skillRatings               Json?
+  pointersForNextInterviewer String?
+  submittedById              String
+  submittedBy                User            @relation("PanelFeedbackSubmissions", fields: [submittedById], references: [id])
+  createdAt                  DateTime        @default(now())
 }

@@ -108,30 +108,15 @@ async function assignInterviewer(candidateId: string, formData: FormData) {
   if (!candidate) return;
   if (candidate.campaign.status === "completed") return;
 
-  // If the interviewer previously had a NO_SHOW interview with this candidate, delete it first
-  const existingNoShow = await prisma.interview.findUnique({
-    where: { candidateId_interviewerId: { candidateId, interviewerId } },
-    include: { feedback: { select: { result: true } } },
+  // Prevent duplicate active interviews for the same candidate+interviewer
+  const existingActive = await prisma.interview.findFirst({
+    where: { candidateId, interviewerId, status: { in: ["scheduled", "ongoing"] } },
   });
-  if (existingNoShow?.feedback?.result === "NO_SHOW") {
-    await prisma.interview.delete({ where: { id: existingNoShow.id } });
-  }
+  if (existingActive) return;
 
-  let interview;
-  try {
-    interview = await prisma.interview.create({
-      data: { candidateId, interviewerId, scheduledAt },
-    });
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
-      // Duplicate assignment, ignore
-      return;
-    }
-    throw error;
-  }
+  const interview = await prisma.interview.create({
+    data: { candidateId, interviewerId, scheduledAt },
+  });
   await auditLog({ userId: session.user.id, action: "interview.assign", entityType: "Interview", entityId: interview.id, metadata: { candidateId, interviewerId } });
 
   // Consume matching availability slot if one exists
@@ -180,6 +165,44 @@ async function createCandidate(campaignId: string, formData: FormData) {
   revalidatePath(`/admin/campaigns/${campaignId}/candidates`);
 }
 
+async function assignPanel(candidateId: string, formData: FormData) {
+  "use server";
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id || session.user.role !== "admin") redirect("/login");
+  const interviewerIds = formData.getAll("interviewerIds") as string[];
+  const scheduledAtRaw = formData.get("scheduledAt") as string;
+  const scheduledAt = scheduledAtRaw ? new Date(scheduledAtRaw) : new Date();
+  if (interviewerIds.length < 2) return;
+
+  const candidate = await prisma.candidate.findUnique({
+    where: { id: candidateId },
+    include: { campaign: { select: { status: true, id: true } } },
+  });
+  if (!candidate) return;
+  if (candidate.campaign.status === "completed") return;
+
+  const panelGroupId = crypto.randomUUID();
+
+  for (const interviewerId of interviewerIds) {
+    const existingActive = await prisma.interview.findFirst({
+      where: { candidateId, interviewerId, status: { in: ["scheduled", "ongoing"] } },
+    });
+    if (existingActive) continue;
+    await prisma.interview.create({
+      data: { candidateId, interviewerId, scheduledAt, panelGroupId },
+    });
+  }
+
+  await auditLog({
+    userId: session.user.id,
+    action: "interview.assign_panel",
+    entityType: "Interview",
+    entityId: panelGroupId,
+    metadata: { candidateId, interviewerIds, panelGroupId },
+  });
+  revalidatePath(`/admin/campaigns/${candidate.campaignId}/candidates`);
+}
+
 async function reassignInterviewer(interviewId: string, formData: FormData) {
   "use server";
   const session = await getServerSession(authOptions);
@@ -194,16 +217,15 @@ async function reassignInterviewer(interviewId: string, formData: FormData) {
   if (interview.candidate.campaign.status === "completed") return;
   if (interview.status !== "scheduled" && interview.status !== "ongoing") return;
 
-  // Check if new interviewer already has an interview with this candidate
-  const existing = await prisma.interview.findUnique({
+  // Check if new interviewer already has an active interview with this candidate
+  const existing = await prisma.interview.findFirst({
     where: {
-      candidateId_interviewerId: {
-        candidateId: interview.candidateId,
-        interviewerId: newInterviewerId,
-      },
+      candidateId: interview.candidateId,
+      interviewerId: newInterviewerId,
+      status: { in: ["scheduled", "ongoing"] },
     },
   });
-  if (existing) return; // Can't reassign — would violate unique constraint
+  if (existing) return;
 
   await prisma.interview.update({
     where: { id: interviewId },
@@ -294,7 +316,7 @@ export default async function CampaignCandidatesPage({
   const statusFilter = statusFilters.length === 0 ? "all" : statusFilters.join(",");
   const searchTrimmed = typeof search === "string" ? search.trim() : "";
 
-  const [campaign, interviewers, interviewerSlots] = await Promise.all([
+  const [campaign, interviewers, interviewerSlots, interviewerSettings] = await Promise.all([
     prisma.campaign.findUnique({
       where: { id },
       include: {
@@ -350,6 +372,10 @@ export default async function CampaignCandidatesPage({
         startTime: s.startTime.toISOString(),
       }))
     ),
+    prisma.interviewerCampaignSetting.findMany({
+      where: { campaignId: id },
+      select: { interviewerId: true, mode: true, roomNumber: true, meetLink: true },
+    }),
   ]);
 
   if (!campaign) notFound();
@@ -453,6 +479,8 @@ export default async function CampaignCandidatesPage({
       cancelScheduledInterview={cancelScheduledInterview}
       rescheduleNoShow={rescheduleNoShow}
       rejectNoShow={rejectNoShow}
+      interviewerSettings={interviewerSettings}
+      assignPanel={campaign.type === "fresher" ? assignPanel : undefined}
     />
   );
 }

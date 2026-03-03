@@ -44,8 +44,14 @@ export default function CandidatesTableFilters({
   const [currentRound, setCurrentRound] = useState(roundFilter);
   useEffect(() => setCurrentRound(roundFilter), [roundFilter]);
 
-  const selectedStatuses: DisplayStatus[] =
-    statusFilter === "all" ? [] : (statusFilter.split(",") as DisplayStatus[]);
+  const [selectedStatuses, setSelectedStatuses] = useState<DisplayStatus[]>(
+    statusFilter === "all" ? [] : (statusFilter.split(",") as DisplayStatus[])
+  );
+  useEffect(() => {
+    setSelectedStatuses(
+      statusFilter === "all" ? [] : (statusFilter.split(",") as DisplayStatus[])
+    );
+  }, [statusFilter]);
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -77,6 +83,7 @@ export default function CandidatesTableFilters({
     const newStatuses = selectedStatuses.includes(status)
       ? selectedStatuses.filter((s) => s !== status)
       : [...selectedStatuses, status];
+    setSelectedStatuses(newStatuses);
     updateFilters(searchValue, newStatuses, sort);
   }
 
@@ -165,7 +172,7 @@ export default function CandidatesTableFilters({
                 <div className="border-t border-border my-1" />
                 <button
                   type="button"
-                  onClick={() => updateFilters(searchValue, [], sort)}
+                  onClick={() => { setSelectedStatuses([]); updateFilters(searchValue, [], sort); }}
                   className="w-full text-left px-3 py-2 text-sm text-foreground-muted hover:bg-surface transition-colors"
                 >
                   Clear all

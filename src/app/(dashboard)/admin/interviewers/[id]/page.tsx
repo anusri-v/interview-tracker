@@ -16,7 +16,8 @@ export default async function InterviewerDetailPage({
   searchParams: Promise<{ campaignId?: string }>;
 }) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id || session.user.role !== "admin") redirect("/login");
+  if (!session?.user?.id) redirect("/login");
+  const isAdmin = session.user.role === "admin";
 
   const { id } = await params;
   const { campaignId } = await searchParams;
@@ -79,7 +80,7 @@ export default async function InterviewerDetailPage({
     <div className="space-y-6">
       <div>
         <Link
-          href={`/admin/interviewers${campaignQuery}`}
+          href={`${isAdmin ? "/admin" : "/interviewer"}/interviewers${campaignQuery}`}
           className="text-sm text-foreground-muted hover:text-foreground transition-colors"
         >
           &larr; Back to Interviewers
@@ -124,7 +125,7 @@ export default async function InterviewerDetailPage({
             <div key={f.id} className="border border-border rounded-xl bg-card p-5 space-y-3">
               <div className="flex items-start justify-between gap-2">
                 <Link
-                  href={`/admin/candidates/${f.candidateId}/details`}
+                  href={isAdmin ? `/admin/candidates/${f.candidateId}/details` : `/interviewer/candidates/${f.candidateId}`}
                   className="font-medium text-foreground hover:text-primary transition-colors"
                 >
                   {f.candidateName}

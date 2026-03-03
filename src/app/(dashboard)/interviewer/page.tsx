@@ -59,7 +59,7 @@ export default async function InterviewerDashboardPage({
 
   const isFresher = selectedCampaign.type === "fresher";
 
-  const [candidateCounts, interviewCounts, selectedByRole] = await Promise.all([
+  const [candidateCounts, interviewCounts, selectedByRole, myActiveInterviews] = await Promise.all([
     prisma.candidate.groupBy({
       by: ["status"],
       where: { campaignId: selectedCampaign.id },
@@ -81,6 +81,17 @@ export default async function InterviewerDashboardPage({
         hiredRole: true,
       },
     }),
+    prisma.interview.findMany({
+      where: {
+        interviewerId: session.user.id,
+        status: { in: ["scheduled", "ongoing"] },
+        candidate: { campaignId: selectedCampaign.id },
+      },
+      include: {
+        candidate: { select: { id: true, name: true, email: true } },
+      },
+      orderBy: { scheduledAt: "asc" },
+    }),
   ]);
 
   const candidatesWithInterviews = await prisma.candidate.findMany({
@@ -101,7 +112,7 @@ export default async function InterviewerDashboardPage({
     },
   });
 
-  // Compute candidates per round (in_pipeline only)
+  // Compute candidates per round (in_pipeline, including those with scheduled/ongoing interviews)
   const candidatesPerRound: { round: number; count: number }[] = [];
   {
     const roundCounts: Record<number, number> = {};
@@ -228,6 +239,61 @@ export default async function InterviewerDashboardPage({
         ))}
       </section>
 
+      {myActiveInterviews.length > 0 && (
+        <section>
+          <h2 className="text-xl font-bold text-foreground tracking-tight mb-4">My Upcoming / Ongoing Interviews</h2>
+          <div className="rounded-xl border border-border overflow-hidden bg-card">
+            <table className="w-full text-base border-collapse">
+              <thead>
+                <tr className="bg-surface">
+                  <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">Candidate</th>
+                  <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">Status</th>
+                  <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">Scheduled</th>
+                  <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {myActiveInterviews.map((interview) => (
+                  <tr key={interview.id} className="border-b border-border last:border-0 hover:bg-surface/50 transition-colors">
+                    <td className="px-5 py-4">
+                      <Link
+                        href={`/interviewer/interviews/${interview.id}`}
+                        className="font-medium text-foreground hover:text-primary transition-colors"
+                      >
+                        {interview.candidate.name}
+                      </Link>
+                    </td>
+                    <td className="px-5 py-4">
+                      <StatusBadge variant={interview.status === "ongoing" ? "ongoing" : "scheduled"} />
+                    </td>
+                    <td className="px-5 py-4 text-foreground-secondary text-sm">
+                      {interview.scheduledAt
+                        ? new Date(interview.scheduledAt).toLocaleString("en-IN", {
+                            timeZone: "Asia/Kolkata",
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "—"}
+                    </td>
+                    <td className="px-5 py-4">
+                      <Link
+                        href={`/interviewer/interviews/${interview.id}`}
+                        className="text-sm font-medium text-primary hover:text-primary-hover transition-colors"
+                      >
+                        {interview.status === "ongoing" ? "Continue" : "View"}
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
       {candidatesPerRound.length > 0 && (
         <section>
           <h2 className="text-xl font-bold text-foreground tracking-tight mb-4">Candidates Per Round</h2>
@@ -244,7 +310,7 @@ export default async function InterviewerDashboardPage({
                   <tr key={round} className="border-b border-border last:border-0 hover:bg-surface/50 transition-colors">
                     <td className="px-5 py-4" colSpan={2}>
                       <Link
-                        href={`${candidatesBase}?status=in_pipeline&round=${round}`}
+                        href={`${candidatesBase}?status=in_pipeline,interview_scheduled,interview_ongoing&round=${round}`}
                         className="flex justify-between text-primary hover:text-primary-hover transition-colors"
                       >
                         <span className="font-medium">Round {round}</span>

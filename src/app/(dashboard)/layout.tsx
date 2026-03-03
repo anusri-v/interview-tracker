@@ -21,7 +21,7 @@ export default async function DashboardLayout({
     isAdmin
       ? prisma.campaign.findMany({
           orderBy: { name: "asc" },
-          select: { id: true, name: true },
+          select: { id: true, name: true, type: true },
         })
       : prisma.campaign.findMany({
           where: {
@@ -32,7 +32,7 @@ export default async function DashboardLayout({
             },
           },
           orderBy: { name: "asc" },
-          select: { id: true, name: true },
+          select: { id: true, name: true, type: true },
         }),
     getDefaultCampaignId(prisma, {
       isAdmin,

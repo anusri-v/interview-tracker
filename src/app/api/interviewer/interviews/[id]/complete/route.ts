@@ -49,32 +49,94 @@ export async function POST(
       }
     }
   }
-  const candidateStatusUpdate =
-    body.result === "NO_HIRE"
-      ? [prisma.candidate.update({ where: { id: interview.candidateId }, data: { status: "rejected" } })]
-      : body.result === "NO_SHOW"
-      ? [prisma.candidate.update({ where: { id: interview.candidateId }, data: { status: "no_show" } })]
-      : [];
+
   const pointers = body.pointersForNextInterviewer?.trim() || null;
   const skillRatings = body.skillRatings && body.skillRatings.length > 0
     ? body.skillRatings.map((sr) => ({ skill: sr.skill.trim(), rating: sr.rating }))
     : null;
-  await prisma.$transaction([
-    prisma.feedback.create({
-      data: {
-        interviewId: id,
-        result: body.result as "HIRE" | "NO_HIRE" | "WEAK_HIRE" | "NO_SHOW",
-        feedback: body.feedback,
-        pointersForNextInterviewer: pointers,
-        skillRatings: skillRatings ?? undefined,
-      },
-    }),
-    prisma.interview.update({
-      where: { id },
-      data: { status: "completed", completedAt: new Date() },
-    }),
-    ...candidateStatusUpdate,
-  ]);
+
+  // Panel flow
+  if (interview.panelGroupId) {
+    // Check if PanelFeedback already exists
+    const existingPanelFeedback = await prisma.panelFeedback.findUnique({
+      where: { panelGroupId: interview.panelGroupId },
+    });
+    if (existingPanelFeedback) {
+      return NextResponse.json({ error: "Feedback already submitted for this panel" }, { status: 400 });
+    }
+
+    // Get all interviews in the panel group
+    const panelInterviews = await prisma.interview.findMany({
+      where: { panelGroupId: interview.panelGroupId },
+    });
+
+    const now = new Date();
+
+    const candidateStatusUpdate =
+      body.result === "NO_HIRE"
+        ? [prisma.candidate.update({ where: { id: interview.candidateId }, data: { status: "rejected" } })]
+        : body.result === "NO_SHOW"
+        ? [prisma.candidate.update({ where: { id: interview.candidateId }, data: { status: "no_show" } })]
+        : [];
+
+    // Transaction: create PanelFeedback, create individual Feedback for each, update all to completed
+    await prisma.$transaction([
+      prisma.panelFeedback.create({
+        data: {
+          panelGroupId: interview.panelGroupId,
+          result: body.result as "HIRE" | "NO_HIRE" | "WEAK_HIRE" | "NO_SHOW",
+          feedback: body.feedback,
+          skillRatings: skillRatings ?? undefined,
+          pointersForNextInterviewer: pointers,
+          submittedById: session.user.id,
+        },
+      }),
+      // Create individual feedback for each panel interview (preserves existing join queries)
+      ...panelInterviews.map((pi) =>
+        prisma.feedback.create({
+          data: {
+            interviewId: pi.id,
+            result: body.result as "HIRE" | "NO_HIRE" | "WEAK_HIRE" | "NO_SHOW",
+            feedback: body.feedback,
+            pointersForNextInterviewer: pointers,
+            skillRatings: skillRatings ?? undefined,
+          },
+        })
+      ),
+      // Mark all panel interviews as completed
+      prisma.interview.updateMany({
+        where: { panelGroupId: interview.panelGroupId },
+        data: { status: "completed", completedAt: now },
+      }),
+      ...candidateStatusUpdate,
+    ]);
+  } else {
+    // Solo flow
+    const candidateStatusUpdate =
+      body.result === "NO_HIRE"
+        ? [prisma.candidate.update({ where: { id: interview.candidateId }, data: { status: "rejected" } })]
+        : body.result === "NO_SHOW"
+        ? [prisma.candidate.update({ where: { id: interview.candidateId }, data: { status: "no_show" } })]
+        : [];
+
+    await prisma.$transaction([
+      prisma.feedback.create({
+        data: {
+          interviewId: id,
+          result: body.result as "HIRE" | "NO_HIRE" | "WEAK_HIRE" | "NO_SHOW",
+          feedback: body.feedback,
+          pointersForNextInterviewer: pointers,
+          skillRatings: skillRatings ?? undefined,
+        },
+      }),
+      prisma.interview.update({
+        where: { id },
+        data: { status: "completed", completedAt: new Date() },
+      }),
+      ...candidateStatusUpdate,
+    ]);
+  }
+
   await auditLog({ userId: session.user.id, action: "interview.complete", entityType: "Interview", entityId: id, metadata: { result: body.result, candidateId: interview.candidateId } });
   return NextResponse.json({ ok: true });
 }

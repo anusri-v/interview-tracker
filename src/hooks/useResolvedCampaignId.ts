@@ -27,7 +27,7 @@ export function setStoredCampaignId(basePath: "admin" | "interviewer", id: strin
   }
 }
 
-type Campaign = { id: string; name: string };
+type Campaign = { id: string; name: string; type?: string };
 
 export function useResolvedCampaignId({
   basePath,

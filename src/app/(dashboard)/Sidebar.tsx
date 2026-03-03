@@ -7,7 +7,7 @@ import { signOut } from "next-auth/react";
 import { useTheme } from "next-themes";
 import { useResolvedCampaignId } from "@/hooks/useResolvedCampaignId";
 
-type Campaign = { id: string; name: string };
+type Campaign = { id: string; name: string; type: string };
 
 type SidebarProps = {
   isAdmin: boolean;
@@ -179,6 +179,7 @@ export default function Sidebar({
         { href: `/interviewer${campaignQuery}`, label: "Dashboard", icon: DashboardIcon, match: (p: string) => p === "/interviewer" },
         { href: `/interviewer/interviews${campaignQuery}`, label: "My Interviews", icon: InterviewsIcon, match: (p: string) => p.startsWith("/interviewer/interviews") },
         { href: candidatesHref, label: "Candidates", icon: CandidatesIcon, match: (p: string) => p.includes("/candidates") || p.match(/^\/interviewer\/campaigns\/[^/]+$/) !== null },
+        { href: `/interviewer/interviewers${campaignQuery}`, label: "Interviewers", icon: InterviewersIcon, match: (p: string) => p.startsWith("/interviewer/interviewers") },
       ];
 
   const initials = email.slice(0, 2).toUpperCase();
@@ -229,12 +230,23 @@ export default function Sidebar({
       {/* Campaign selector */}
       {campaigns.length > 0 && (
         <div className="px-4 py-3 border-t border-border/50">
-          <label
-            htmlFor="sidebar-campaign"
-            className="block text-xs font-medium text-foreground-muted mb-1.5"
-          >
-            Campaign
-          </label>
+          <div className="flex items-center gap-2 mb-1.5">
+            <label
+              htmlFor="sidebar-campaign"
+              className="text-xs font-medium text-foreground-muted"
+            >
+              Campaign
+            </label>
+            {(() => {
+              const selected = campaigns.find((c) => c.id === selectedId);
+              if (!selected) return null;
+              return selected.type === "fresher" ? (
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">Fresher</span>
+              ) : (
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">Experienced</span>
+              );
+            })()}
+          </div>
           <select
             id="sidebar-campaign"
             value={selectedId}

@@ -7,9 +7,9 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import StatusBadge from "@/components/ui/StatusBadge";
-import SkillRatingsDisplay from "@/components/ui/SkillRatingsDisplay";
 import AutoRefresh from "@/components/ui/AutoRefresh";
 import ReincludeButton from "./ReincludeButton";
+import FeedbackList from "./FeedbackList";
 
 export const dynamic = "force-dynamic";
 
@@ -54,13 +54,23 @@ export default async function CandidateDetailsPage({
       interviews: {
         include: {
           feedback: true,
-          interviewer: { select: { name: true, email: true } },
+          interviewer: { select: { id: true, name: true, email: true } },
         },
-        orderBy: { completedAt: "asc" },
+        orderBy: { createdAt: "asc" },
       },
     },
   });
   if (!candidate) notFound();
+
+  // Fetch interviewer campaign settings for room/meet link display
+  const interviewerSettings = await prisma.interviewerCampaignSetting.findMany({
+    where: { campaignId: candidate.campaignId },
+    select: { interviewerId: true, mode: true, roomNumber: true, meetLink: true },
+  });
+  const settingMap: Record<string, { mode: string | null; roomNumber: string | null; meetLink: string | null }> = {};
+  for (const s of interviewerSettings) {
+    settingMap[s.interviewerId] = { mode: s.mode, roomNumber: s.roomNumber, meetLink: s.meetLink };
+  }
 
   const isExperienced = candidate.campaign?.type === "experienced";
   const activeInterviews = candidate.interviews.filter(
@@ -141,8 +151,23 @@ export default async function CandidateDetailsPage({
                 className="border border-border rounded-xl bg-card p-4 text-sm text-foreground"
               >
                 <div className="flex items-center justify-between">
-                  <p className="font-medium">
+                  <p className="font-medium flex items-center gap-2">
                     {interview.interviewer.name ?? interview.interviewer.email}
+                    {(() => {
+                      const s = settingMap[interview.interviewer.id];
+                      if (!s?.mode) return null;
+                      if (s.mode === "offline" && s.roomNumber) {
+                        return <span className="text-xs bg-orange-100 text-orange-700 border border-orange-300 rounded-full px-2 py-0.5 font-medium">Room {s.roomNumber}</span>;
+                      }
+                      if (s.mode === "online" && s.meetLink) {
+                        return (
+                          <a href={s.meetLink} target="_blank" rel="noopener noreferrer" className="text-xs bg-teal-100 text-teal-700 border border-teal-300 rounded-full px-2 py-0.5 font-medium hover:underline">
+                            Meet link
+                          </a>
+                        );
+                      }
+                      return null;
+                    })()}
                   </p>
                   <div className="flex items-center gap-3">
                     {interview.scheduledAt && (
@@ -177,61 +202,33 @@ export default async function CandidateDetailsPage({
         <h2 className="text-xl font-bold mb-3 text-foreground tracking-tight">
           Past Interview Feedbacks
         </h2>
-        {completedInterviews.length === 0 ? (
-          <p className="text-foreground-muted text-sm">No completed interviews yet.</p>
-        ) : (
-          <ul className="space-y-3">
-            {completedInterviews.map((interview, index) => (
-              <li
-                key={interview.id}
-                className="border border-border rounded-xl bg-card p-4 text-sm text-foreground"
-              >
-                <div className="flex items-center justify-between">
-                  <p className="font-medium">
-                    Round {index + 1} &mdash;{" "}
-                    {interview.interviewer.name ?? interview.interviewer.email}
-                  </p>
-                  <div className="flex items-center gap-3">
-                    {interview.completedAt && (
-                      <span className="text-xs text-foreground-muted">
-                        {new Date(interview.completedAt).toLocaleDateString("en-IN", {
-                          timeZone: "Asia/Kolkata",
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })}{" "}
-                        {new Date(interview.completedAt).toLocaleTimeString("en-IN", {
-                          timeZone: "Asia/Kolkata",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-                    )}
-                    {interview.feedback && (
-                      <StatusBadge
-                        variant={interview.feedback.result.toLowerCase() as any}
-                      />
-                    )}
-                  </div>
-                </div>
-                {interview.feedback && (
-                  <>
-                    <p className="mt-2 text-foreground-secondary">
-                      {interview.feedback.feedback}
-                    </p>
-                    <SkillRatingsDisplay skillRatings={interview.feedback.skillRatings} />
-                    {interview.feedback.pointersForNextInterviewer && (
-                      <p className="mt-1 text-foreground-muted">
-                        Pointers for next interviewer:{" "}
-                        {interview.feedback.pointersForNextInterviewer}
-                      </p>
-                    )}
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
+        <FeedbackList
+          candidateName={candidate.name}
+          interviews={completedInterviews.map((interview, index) => {
+            const panelSiblingNames = interview.panelGroupId
+              ? completedInterviews
+                  .filter((s) => s.panelGroupId === interview.panelGroupId && s.id !== interview.id)
+                  .map((s) => s.interviewer.name ?? s.interviewer.email)
+              : [];
+            return {
+              id: interview.id,
+              round: index + 1,
+              interviewerName: interview.interviewer.name ?? interview.interviewer.email,
+              completedAt: interview.completedAt?.toISOString() ?? null,
+              result: interview.feedback?.result ?? null,
+              feedbackText: interview.feedback?.feedback ?? null,
+              pointers: interview.feedback?.pointersForNextInterviewer ?? null,
+              skillRatings: Array.isArray(interview.feedback?.skillRatings)
+                ? (interview.feedback!.skillRatings as Array<{ skill: string; rating: number }>)
+                : [],
+              nextRoundAssigned: interview.completedAt
+                ? candidate.interviews.some((other) => other.createdAt > interview.completedAt!)
+                : false,
+              panelGroupId: interview.panelGroupId ?? null,
+              panelSiblingNames,
+            };
+          })}
+        />
       </section>
     </div>
   );

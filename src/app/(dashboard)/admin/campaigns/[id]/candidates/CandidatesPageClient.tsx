@@ -15,6 +15,7 @@ import UploadCsvWithHistoryModal from "@/components/ui/UploadCsvWithHistoryModal
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ReassignInterviewModal from "@/components/ui/ReassignInterviewModal";
 import { useAutoRefresh } from "@/lib/useAutoRefresh";
+import AssignmentToast from "@/components/ui/AssignmentToast";
 
 export type CandidateWithInterviews = {
   id: string;
@@ -41,6 +42,13 @@ export type CandidateWithInterviews = {
 type Interviewer = { id: string; name: string | null; email: string; hasOngoing: boolean; hasScheduled: boolean };
 
 type InterviewerSlot = { id: string; interviewerId: string; startTime: string };
+
+type InterviewerSetting = {
+  interviewerId: string;
+  mode?: string | null;
+  roomNumber?: string | null;
+  meetLink?: string | null;
+};
 
 type ModalState =
   | { type: "none" }
@@ -78,6 +86,8 @@ export default function CandidatesPageClient({
   rejectNoShow,
   sort = "default",
   roundFilter = "all",
+  interviewerSettings = [],
+  assignPanel,
 }: {
   campaignId: string;
   campaignType: string;
@@ -102,6 +112,8 @@ export default function CandidatesPageClient({
   rejectNoShow?: (candidateId: string) => Promise<void>;
   sort?: string;
   roundFilter?: string;
+  interviewerSettings?: InterviewerSetting[];
+  assignPanel?: (candidateId: string, formData: FormData) => Promise<void>;
 }) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -112,6 +124,7 @@ export default function CandidatesPageClient({
   const [modal, setModal] = useState<ModalState>({ type: "none" });
   const [actionPending, startActionTransition] = useTransition();
   const isExperienced = campaignType === "experienced";
+  const [toastInfo, setToastInfo] = useState<{ candidateName: string; mode?: string | null; roomNumber?: string | null; meetLink?: string | null } | null>(null);
 
   function setView(newView: "table" | "overall") {
     const params = new URLSearchParams(searchParams.toString());
@@ -501,8 +514,11 @@ export default function CandidatesPageClient({
               existingInterviewerIds={getExistingInterviewerIds(modal.candidate)}
               completedInterviewerIds={getCompletedInterviewerIds(modal.candidate)}
               assignInterviewer={assignInterviewer}
+              assignPanel={assignPanel}
               campaignType={campaignType}
               interviewerSlots={interviewerSlots}
+              interviewerSettings={interviewerSettings}
+              onAssigned={(info) => setToastInfo(info)}
             />
           )}
           {modal.type === "addCandidate" && (
@@ -568,6 +584,17 @@ export default function CandidatesPageClient({
             />
           )}
         </>
+      )}
+
+      {/* Assignment Toast */}
+      {toastInfo && (
+        <AssignmentToast
+          candidateName={toastInfo.candidateName}
+          mode={toastInfo.mode}
+          roomNumber={toastInfo.roomNumber}
+          meetLink={toastInfo.meetLink}
+          onDismiss={() => setToastInfo(null)}
+        />
       )}
     </div>
   );

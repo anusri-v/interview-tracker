@@ -5,7 +5,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@prisma/client";
 import CandidateDetailClient from "./CandidateDetailClient";
 
 export const dynamic = "force-dynamic";
@@ -25,20 +24,15 @@ async function assignInterviewer(candidateId: string, formData: FormData) {
   if (!candidate) return;
   if (candidate.campaign.status === "completed") return;
 
-  let interview;
-  try {
-    interview = await prisma.interview.create({
-      data: { candidateId, interviewerId, scheduledAt },
-    });
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
-      return;
-    }
-    throw error;
-  }
+  // Prevent duplicate active interviews for the same candidate+interviewer
+  const existingActive = await prisma.interview.findFirst({
+    where: { candidateId, interviewerId, status: { in: ["scheduled", "ongoing"] } },
+  });
+  if (existingActive) return;
+
+  const interview = await prisma.interview.create({
+    data: { candidateId, interviewerId, scheduledAt },
+  });
   await auditLog({ userId: session.user.id, action: "interview.assign", entityType: "Interview", entityId: interview.id, metadata: { candidateId, interviewerId } });
   revalidatePath(
     `/admin/campaigns/${candidate.campaignId}/candidates/${candidateId}`
@@ -59,12 +53,11 @@ async function reassignInterviewer(interviewId: string, formData: FormData) {
   if (interview.candidate.campaign.status === "completed") return;
   if (interview.status !== "scheduled" && interview.status !== "ongoing") return;
 
-  const existing = await prisma.interview.findUnique({
+  const existing = await prisma.interview.findFirst({
     where: {
-      candidateId_interviewerId: {
-        candidateId: interview.candidateId,
-        interviewerId: newInterviewerId,
-      },
+      candidateId: interview.candidateId,
+      interviewerId: newInterviewerId,
+      status: { in: ["scheduled", "ongoing"] },
     },
   });
   if (existing) return;
@@ -108,6 +101,44 @@ async function reincludeInPipeline(candidateId: string) {
   revalidatePath(`/admin/campaigns/${candidate.campaignId}/candidates/${candidateId}`);
 }
 
+async function assignPanel(candidateId: string, formData: FormData) {
+  "use server";
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id || session.user.role !== "admin") redirect("/login");
+  const interviewerIds = formData.getAll("interviewerIds") as string[];
+  const scheduledAtRaw = formData.get("scheduledAt") as string;
+  const scheduledAt = scheduledAtRaw ? new Date(scheduledAtRaw) : new Date();
+  if (interviewerIds.length < 2) return;
+
+  const candidate = await prisma.candidate.findUnique({
+    where: { id: candidateId },
+    include: { campaign: { select: { status: true, id: true } } },
+  });
+  if (!candidate) return;
+  if (candidate.campaign.status === "completed") return;
+
+  const panelGroupId = crypto.randomUUID();
+
+  for (const interviewerId of interviewerIds) {
+    const existingActive = await prisma.interview.findFirst({
+      where: { candidateId, interviewerId, status: { in: ["scheduled", "ongoing"] } },
+    });
+    if (existingActive) continue;
+    await prisma.interview.create({
+      data: { candidateId, interviewerId, scheduledAt, panelGroupId },
+    });
+  }
+
+  await auditLog({
+    userId: session.user.id,
+    action: "interview.assign_panel",
+    entityType: "Interview",
+    entityId: panelGroupId,
+    metadata: { candidateId, interviewerIds, panelGroupId },
+  });
+  revalidatePath(`/admin/campaigns/${candidate.campaignId}/candidates/${candidateId}`);
+}
+
 export default async function CandidateDetailPage({
   params,
 }: {
@@ -118,13 +149,22 @@ export default async function CandidateDetailPage({
 
   const { id: campaignId, candidateId } = await params;
 
-  const [candidate, campaign, interviewersRaw, interviewerSlots] = await Promise.all([
+  const [candidate, campaign, interviewersRaw, interviewerSlots, interviewerSettingsRaw] = await Promise.all([
     prisma.candidate.findUnique({
       where: { id: candidateId },
       include: {
         interviews: {
           orderBy: { createdAt: "asc" },
-          include: {
+          select: {
+            id: true,
+            candidateId: true,
+            interviewerId: true,
+            scheduledAt: true,
+            status: true,
+            startedAt: true,
+            completedAt: true,
+            panelGroupId: true,
+            createdAt: true,
             interviewer: { select: { id: true, name: true, email: true } },
             feedback: {
               select: {
@@ -161,6 +201,10 @@ export default async function CandidateDetailPage({
       where: { campaignId, startTime: { gt: new Date() } },
       select: { id: true, interviewerId: true, startTime: true },
       orderBy: { startTime: "asc" },
+    }),
+    prisma.interviewerCampaignSetting.findMany({
+      where: { campaignId },
+      select: { interviewerId: true, mode: true, roomNumber: true, meetLink: true },
     }),
   ]);
 
@@ -209,25 +253,104 @@ export default async function CandidateDetailPage({
         resumeLink: candidate.resumeLink,
         status: candidate.status,
       }}
-      completedInterviews={completedInterviews.map((i, idx) => ({
-        id: i.id,
-        round: idx + 1,
-        interviewerName: i.interviewer.name || i.interviewer.email,
-        status: i.status,
-        result: i.feedback?.result ?? null,
-        feedbackText: i.feedback?.feedback ?? null,
-        pointers: i.feedback?.pointersForNextInterviewer ?? null,
-        skillRatings: Array.isArray(i.feedback?.skillRatings)
-          ? (i.feedback!.skillRatings as Array<{ skill: string; rating: number }>)
-          : [],
-      }))}
-      activeInterviews={activeInterviews.map((i) => ({
-        id: i.id,
-        interviewerId: i.interviewerId,
-        interviewerName: i.interviewer.name || i.interviewer.email,
-        status: i.status,
-        scheduledAt: i.scheduledAt?.toISOString() ?? null,
-      }))}
+      completedInterviews={(() => {
+        // Group panel interviews by panelGroupId
+        const seen = new Set<string>();
+        const result: Array<{
+          id: string;
+          round: number;
+          interviewerName: string;
+          status: string;
+          result: string | null;
+          feedbackText: string | null;
+          pointers: string | null;
+          skillRatings: Array<{ skill: string; rating: number }>;
+          nextRoundAssigned: boolean;
+          panelGroupId?: string | null;
+          panelInterviewerNames?: string[];
+        }> = [];
+        let roundIdx = 0;
+        for (const i of completedInterviews) {
+          if (i.panelGroupId) {
+            if (seen.has(i.panelGroupId)) continue;
+            seen.add(i.panelGroupId);
+            const panelSiblings = completedInterviews.filter((s) => s.panelGroupId === i.panelGroupId);
+            roundIdx++;
+            result.push({
+              id: i.id,
+              round: roundIdx,
+              interviewerName: panelSiblings.map((s) => s.interviewer.name || s.interviewer.email).join(", "),
+              status: i.status,
+              result: i.feedback?.result ?? null,
+              feedbackText: i.feedback?.feedback ?? null,
+              pointers: i.feedback?.pointersForNextInterviewer ?? null,
+              skillRatings: Array.isArray(i.feedback?.skillRatings)
+                ? (i.feedback!.skillRatings as Array<{ skill: string; rating: number }>)
+                : [],
+              nextRoundAssigned: i.completedAt
+                ? candidate.interviews.some((other) => other.createdAt > i.completedAt!)
+                : false,
+              panelGroupId: i.panelGroupId,
+              panelInterviewerNames: panelSiblings.map((s) => s.interviewer.name || s.interviewer.email),
+            });
+          } else {
+            roundIdx++;
+            result.push({
+              id: i.id,
+              round: roundIdx,
+              interviewerName: i.interviewer.name || i.interviewer.email,
+              status: i.status,
+              result: i.feedback?.result ?? null,
+              feedbackText: i.feedback?.feedback ?? null,
+              pointers: i.feedback?.pointersForNextInterviewer ?? null,
+              skillRatings: Array.isArray(i.feedback?.skillRatings)
+                ? (i.feedback!.skillRatings as Array<{ skill: string; rating: number }>)
+                : [],
+              nextRoundAssigned: i.completedAt
+                ? candidate.interviews.some((other) => other.createdAt > i.completedAt!)
+                : false,
+            });
+          }
+        }
+        return result;
+      })()}
+      activeInterviews={(() => {
+        const seen = new Set<string>();
+        const result: Array<{
+          id: string;
+          interviewerId: string;
+          interviewerName: string;
+          status: string;
+          scheduledAt: string | null;
+          panelGroupId?: string | null;
+          panelInterviewerNames?: string[];
+        }> = [];
+        for (const i of activeInterviews) {
+          if (i.panelGroupId) {
+            if (seen.has(i.panelGroupId)) continue;
+            seen.add(i.panelGroupId);
+            const panelSiblings = activeInterviews.filter((s) => s.panelGroupId === i.panelGroupId);
+            result.push({
+              id: i.id,
+              interviewerId: i.interviewerId,
+              interviewerName: panelSiblings.map((s) => s.interviewer.name || s.interviewer.email).join(", "),
+              status: i.status,
+              scheduledAt: i.scheduledAt?.toISOString() ?? null,
+              panelGroupId: i.panelGroupId,
+              panelInterviewerNames: panelSiblings.map((s) => s.interviewer.name || s.interviewer.email),
+            });
+          } else {
+            result.push({
+              id: i.id,
+              interviewerId: i.interviewerId,
+              interviewerName: i.interviewer.name || i.interviewer.email,
+              status: i.status,
+              scheduledAt: i.scheduledAt?.toISOString() ?? null,
+            });
+          }
+        }
+        return result;
+      })()}
       canAssign={canAssign}
       interviewers={interviewers}
       existingInterviewerIds={existingInterviewerIds}
@@ -242,6 +365,8 @@ export default async function CandidateDetailPage({
         interviewerId: s.interviewerId,
         startTime: s.startTime.toISOString(),
       }))}
+      interviewerSettings={interviewerSettingsRaw}
+      assignPanel={campaign.type === "fresher" ? assignPanel : undefined}
     />
   );
 }

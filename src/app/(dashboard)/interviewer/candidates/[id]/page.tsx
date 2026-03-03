@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
-import InterviewerCandidateDetailClient from "./InterviewerCandidateDetailClient";
+import FeedbackList from "@/app/(dashboard)/admin/candidates/[id]/details/FeedbackList";
 import AutoRefresh from "@/components/ui/AutoRefresh";
 
 export default async function InterviewerCandidateDetailPage({
@@ -20,39 +20,46 @@ export default async function InterviewerCandidateDetailPage({
     include: {
       campaign: { select: { id: true, name: true, type: true } },
       interviews: {
-        where: { status: "completed" },
         include: {
           feedback: true,
           interviewer: { select: { name: true, email: true } },
         },
-        orderBy: { completedAt: "asc" },
+        orderBy: { createdAt: "asc" },
       },
     },
   });
   if (!candidate) notFound();
 
-  // Check if candidate has active interviews
-  const activeInterviewCount = await prisma.interview.count({
-    where: {
-      candidateId: id,
-      status: { in: ["scheduled", "ongoing"] },
-    },
-  });
+  const allInterviews = candidate.interviews;
 
   const isExperienced = candidate.campaign?.type === "experienced";
 
-  const interviewsData = candidate.interviews.map((i) => ({
-    id: i.id,
-    interviewerId: i.interviewerId,
-    interviewerName: i.interviewer.name ?? i.interviewer.email,
-    completedAt: i.completedAt?.toISOString() ?? null,
-    result: i.feedback?.result ?? null,
-    feedbackText: i.feedback?.feedback ?? null,
-    pointers: i.feedback?.pointersForNextInterviewer ?? null,
-    skillRatings: Array.isArray(i.feedback?.skillRatings)
-      ? (i.feedback!.skillRatings as Array<{ skill: string; rating: number }>)
-      : [],
-  }));
+  const completedInterviews = allInterviews.filter((i) => i.status === "completed");
+
+  const interviewsData = completedInterviews.map((i) => {
+    const panelSiblingNames = i.panelGroupId
+      ? completedInterviews
+          .filter((s) => s.panelGroupId === i.panelGroupId && s.id !== i.id)
+          .map((s) => s.interviewer.name ?? s.interviewer.email)
+      : [];
+    return {
+      id: i.id,
+      interviewerId: i.interviewerId,
+      interviewerName: i.interviewer.name ?? i.interviewer.email,
+      completedAt: i.completedAt?.toISOString() ?? null,
+      result: i.feedback?.result ?? null,
+      feedbackText: i.feedback?.feedback ?? null,
+      pointers: i.feedback?.pointersForNextInterviewer ?? null,
+      skillRatings: Array.isArray(i.feedback?.skillRatings)
+        ? (i.feedback!.skillRatings as Array<{ skill: string; rating: number }>)
+        : [],
+      nextRoundAssigned: i.completedAt
+        ? allInterviews.some((other) => other.createdAt > i.completedAt!)
+        : false,
+      panelGroupId: i.panelGroupId ?? null,
+      panelSiblingNames,
+    };
+  });
 
   return (
     <div className="space-y-8 max-w-2xl">
@@ -83,12 +90,14 @@ export default async function InterviewerCandidateDetailPage({
         </div>
       </div>
 
-      <InterviewerCandidateDetailClient
-        candidateName={candidate.name}
-        interviews={interviewsData}
-        currentUserId={session.user.id}
-        hasActiveInterviews={activeInterviewCount > 0}
-      />
+      <section>
+        <h2 className="text-xl font-bold mb-3 text-foreground tracking-tight">Past Interview Feedbacks</h2>
+        <FeedbackList
+          candidateName={candidate.name}
+          interviews={interviewsData}
+          currentUserId={session.user.id}
+        />
+      </section>
     </div>
   );
 }

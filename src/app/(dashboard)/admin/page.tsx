@@ -89,7 +89,7 @@ export default async function AdminDashboardPage({
     },
   });
 
-  // Compute candidates per round (in_pipeline only)
+  // Compute candidates per round (in_pipeline, including those with scheduled/ongoing interviews)
   const candidatesPerRound: { round: number; count: number }[] = [];
   {
     const roundCounts: Record<number, number> = {};
@@ -251,7 +251,7 @@ export default async function AdminDashboardPage({
                   >
                     <td className="px-5 py-4" colSpan={2}>
                       <Link
-                        href={`/admin/campaigns/${selectedCampaign.id}/candidates?status=in_pipeline&round=${round}`}
+                        href={`/admin/campaigns/${selectedCampaign.id}/candidates?status=in_pipeline,interview_scheduled,interview_ongoing&round=${round}`}
                         className="flex justify-between text-primary hover:text-primary-hover transition-colors"
                       >
                         <span className="font-medium">Round {round}</span>

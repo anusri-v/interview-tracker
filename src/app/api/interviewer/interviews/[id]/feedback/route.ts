@@ -22,8 +22,7 @@ export async function PUT(
         select: {
           id: true,
           interviews: {
-            where: { status: { in: ["scheduled", "ongoing"] } },
-            select: { id: true },
+            select: { id: true, createdAt: true },
           },
         },
       },
@@ -49,9 +48,12 @@ export async function PUT(
     return NextResponse.json({ error: "Can only edit WEAK_HIRE feedback" }, { status: 400 });
   }
 
-  // Validate: candidate must have no active interviews
-  if (interview.candidate.interviews.length > 0) {
-    return NextResponse.json({ error: "Cannot edit while candidate has active interviews" }, { status: 400 });
+  // Validate: no next round interview was ever assigned after this interview's completion
+  const nextRoundAssigned = interview.completedAt
+    ? interview.candidate.interviews.some((i) => i.createdAt > interview.completedAt!)
+    : false;
+  if (nextRoundAssigned) {
+    return NextResponse.json({ error: "Cannot edit after next round has been assigned" }, { status: 400 });
   }
 
   let body: {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useCallback } from "react";
 import Link from "next/link";
 import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import StatusBadge from "@/components/ui/StatusBadge";
@@ -8,6 +8,7 @@ import AssignInterviewModal from "@/components/ui/AssignInterviewModal";
 import ReassignInterviewModal from "@/components/ui/ReassignInterviewModal";
 import EditFeedbackModal from "@/components/ui/EditFeedbackModal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import AssignmentToast from "@/components/ui/AssignmentToast";
 
 type CandidateInfo = {
   id: string;
@@ -29,6 +30,9 @@ type CompletedInterview = {
   feedbackText: string | null;
   pointers: string | null;
   skillRatings: Array<{ skill: string; rating: number }>;
+  nextRoundAssigned?: boolean;
+  panelGroupId?: string | null;
+  panelInterviewerNames?: string[];
 };
 
 type ActiveInterview = {
@@ -37,11 +41,20 @@ type ActiveInterview = {
   interviewerName: string;
   status: string;
   scheduledAt: string | null;
+  panelGroupId?: string | null;
+  panelInterviewerNames?: string[];
 };
 
 type Interviewer = { id: string; name: string | null; email: string; hasOngoing?: boolean; hasScheduled?: boolean };
 
 type InterviewerSlot = { id: string; interviewerId: string; startTime: string };
+
+type InterviewerSetting = {
+  interviewerId: string;
+  mode?: string | null;
+  roomNumber?: string | null;
+  meetLink?: string | null;
+};
 
 export default function CandidateDetailClient({
   campaignId,
@@ -59,6 +72,8 @@ export default function CandidateDetailClient({
   reincludeInPipeline,
   campaignType,
   interviewerSlots = [],
+  interviewerSettings = [],
+  assignPanel,
 }: {
   campaignId: string;
   campaignName: string;
@@ -75,6 +90,8 @@ export default function CandidateDetailClient({
   reincludeInPipeline?: (candidateId: string) => Promise<void>;
   campaignType?: string;
   interviewerSlots?: InterviewerSlot[];
+  interviewerSettings?: InterviewerSetting[];
+  assignPanel?: (candidateId: string, formData: FormData) => Promise<void>;
 }) {
   useAutoRefresh(30000);
   const [reincludePending, startReincludeTransition] = useTransition();
@@ -82,6 +99,16 @@ export default function CandidateDetailClient({
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [reassignInterview, setReassignInterview] = useState<ActiveInterview | null>(null);
   const [editFeedbackInterview, setEditFeedbackInterview] = useState<CompletedInterview | null>(null);
+  const [toastInfo, setToastInfo] = useState<{ candidateName: string; mode?: string | null; roomNumber?: string | null; meetLink?: string | null } | null>(null);
+
+  const settingMap: Record<string, InterviewerSetting> = {};
+  for (const s of interviewerSettings) {
+    settingMap[s.interviewerId] = s;
+  }
+
+  const handleAssigned = useCallback((info: { candidateName: string; mode?: string | null; roomNumber?: string | null; meetLink?: string | null } | null) => {
+    setToastInfo(info);
+  }, []);
 
   const displayStatus =
     candidate.status === "rejected"
@@ -181,7 +208,27 @@ export default function CandidateDetailClient({
               >
                 <div>
                   <p className="text-sm font-medium text-foreground">
-                    Interviewer: {interview.interviewerName}
+                    {interview.panelGroupId && (
+                      <span className="text-xs bg-indigo-100 text-indigo-700 border border-indigo-300 rounded-full px-2 py-0.5 font-medium mr-2">Panel</span>
+                    )}
+                    {interview.panelInterviewerNames
+                      ? interview.panelInterviewerNames.join(", ")
+                      : `Interviewer: ${interview.interviewerName}`}
+                    {(() => {
+                      const s = settingMap[interview.interviewerId];
+                      if (!s?.mode) return null;
+                      if (s.mode === "offline" && s.roomNumber) {
+                        return <span className="ml-2 text-xs bg-orange-100 text-orange-700 border border-orange-300 rounded-full px-2 py-0.5 font-medium">Room {s.roomNumber}</span>;
+                      }
+                      if (s.mode === "online" && s.meetLink) {
+                        return (
+                          <a href={s.meetLink} target="_blank" rel="noopener noreferrer" className="ml-2 text-xs bg-teal-100 text-teal-700 border border-teal-300 rounded-full px-2 py-0.5 font-medium hover:underline">
+                            Meet link
+                          </a>
+                        );
+                      }
+                      return null;
+                    })()}
                   </p>
                   {interview.scheduledAt && (
                     <p className="text-xs text-foreground-muted mt-1">
@@ -223,12 +270,15 @@ export default function CandidateDetailClient({
                     <span className="text-sm font-semibold text-foreground">
                       Round {interview.round}
                     </span>
+                    {interview.panelGroupId && (
+                      <span className="text-xs bg-indigo-100 text-indigo-700 border border-indigo-300 rounded-full px-2 py-0.5 font-medium">Panel</span>
+                    )}
                     <span className="text-sm text-foreground-secondary">
                       {interview.interviewerName}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    {interview.result === "WEAK_HIRE" && activeInterviews.length === 0 && (
+                    {interview.result === "WEAK_HIRE" && !interview.nextRoundAssigned && (
                       <button
                         onClick={() => setEditFeedbackInterview(interview)}
                         className="px-3 py-1 text-xs font-medium rounded-lg border border-border text-foreground hover:bg-surface transition-colors"
@@ -325,8 +375,22 @@ export default function CandidateDetailClient({
           existingInterviewerIds={existingInterviewerIds}
           completedInterviewerIds={completedInterviewerIds}
           assignInterviewer={assignInterviewer}
+          assignPanel={assignPanel}
           campaignType={campaignType}
           interviewerSlots={interviewerSlots}
+          interviewerSettings={interviewerSettings}
+          onAssigned={handleAssigned}
+        />
+      )}
+
+      {/* Assignment Toast */}
+      {toastInfo && (
+        <AssignmentToast
+          candidateName={toastInfo.candidateName}
+          mode={toastInfo.mode}
+          roomNumber={toastInfo.roomNumber}
+          meetLink={toastInfo.meetLink}
+          onDismiss={() => setToastInfo(null)}
         />
       )}
     </div>

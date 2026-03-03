@@ -6,6 +6,13 @@ import Modal from "./Modal";
 
 type Interviewer = { id: string; name: string | null; email: string; hasOngoing?: boolean; hasScheduled?: boolean };
 
+type InterviewerSetting = {
+  interviewerId: string;
+  mode?: string | null;
+  roomNumber?: string | null;
+  meetLink?: string | null;
+};
+
 export default function AssignInterviewModal({
   open,
   onClose,
@@ -16,8 +23,11 @@ export default function AssignInterviewModal({
   existingInterviewerIds,
   completedInterviewerIds = [],
   assignInterviewer,
+  assignPanel,
   campaignType,
   interviewerSlots = [],
+  interviewerSettings = [],
+  onAssigned,
 }: {
   open: boolean;
   onClose: () => void;
@@ -28,14 +38,22 @@ export default function AssignInterviewModal({
   existingInterviewerIds: string[];
   completedInterviewerIds?: string[];
   assignInterviewer: (candidateId: string, formData: FormData) => Promise<void>;
+  assignPanel?: (candidateId: string, formData: FormData) => Promise<void>;
   campaignType?: string;
   interviewerSlots?: { id: string; interviewerId: string; startTime: string }[];
+  interviewerSettings?: InterviewerSetting[];
+  onAssigned?: (info: { candidateName: string; mode?: string | null; roomNumber?: string | null; meetLink?: string | null } | null) => void;
 }) {
   const [isPending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState("");
+  const isFresher = campaignType === "fresher";
+
+  // Panel mode state (fresher only)
+  const [panelMode, setPanelMode] = useState(false);
+  const [selectedPanelIds, setSelectedPanelIds] = useState<string[]>([]);
 
   // Filter out interviewers with active (non-completed) interviews for this candidate
   const activeInterviewerIds = existingInterviewerIds.filter(
@@ -61,6 +79,12 @@ export default function AssignInterviewModal({
     slotCountMap[s.interviewerId] = (slotCountMap[s.interviewerId] || 0) + 1;
   }
 
+  // Settings lookup
+  const settingMap: Record<string, InterviewerSetting> = {};
+  for (const s of interviewerSettings) {
+    settingMap[s.interviewerId] = s;
+  }
+
   // Slots for selected interviewer
   const selectedSlots = interviewerSlots
     .filter((s) => s.interviewerId === selectedId)
@@ -78,8 +102,63 @@ export default function AssignInterviewModal({
     });
   }
 
+  function getSettingBadge(userId: string) {
+    const setting = settingMap[userId];
+    if (!setting?.mode) return null;
+    if (setting.mode === "offline" && setting.roomNumber) {
+      return (
+        <span className="text-xs bg-orange-100 text-orange-700 border border-orange-300 rounded-full px-2 py-0.5 font-medium whitespace-nowrap">
+          Room {setting.roomNumber}
+        </span>
+      );
+    }
+    if (setting.mode === "online" && setting.meetLink) {
+      return (
+        <span className="text-xs bg-teal-100 text-teal-700 border border-teal-300 rounded-full px-2 py-0.5 font-medium whitespace-nowrap">
+          Meet link set
+        </span>
+      );
+    }
+    return null;
+  }
+
+  function togglePanelId(id: string) {
+    setSelectedPanelIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
+
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
+    if (panelMode && assignPanel) {
+      if (selectedPanelIds.length < 2) return;
+      const formData = new FormData();
+      for (const id of selectedPanelIds) {
+        formData.append("interviewerIds", id);
+      }
+      const scheduledAt = formRef.current?.querySelector<HTMLInputElement>(
+        'input[name="scheduledAt"]'
+      )?.value;
+      if (scheduledAt) formData.set("scheduledAt", scheduledAt);
+      startTransition(async () => {
+        await assignPanel(candidateId, formData);
+        router.refresh();
+        if (onAssigned) {
+          // For panel, use the first selected interviewer's setting
+          const setting = settingMap[selectedPanelIds[0]];
+          onAssigned({
+            candidateName,
+            mode: setting?.mode,
+            roomNumber: setting?.roomNumber,
+            meetLink: setting?.meetLink,
+          });
+        }
+        onClose();
+      });
+      return;
+    }
+
     if (!selectedId) return;
     const formData = new FormData();
     formData.set("interviewerId", selectedId);
@@ -90,9 +169,22 @@ export default function AssignInterviewModal({
     startTransition(async () => {
       await assignInterviewer(candidateId, formData);
       router.refresh();
+      if (onAssigned) {
+        const setting = settingMap[selectedId];
+        onAssigned({
+          candidateName,
+          mode: setting?.mode,
+          roomNumber: setting?.roomNumber,
+          meetLink: setting?.meetLink,
+        });
+      }
       onClose();
     });
   }
+
+  const canSubmit = panelMode
+    ? selectedPanelIds.length >= 2
+    : !!selectedId;
 
   return (
     <Modal open={open} onClose={onClose} title="Assign Interview">
@@ -100,10 +192,35 @@ export default function AssignInterviewModal({
         Assigning <strong className="text-foreground">Round {round}</strong> for{" "}
         <strong className="text-foreground">{candidateName}</strong>
       </p>
+
+      {/* Panel mode toggle — fresher campaigns only */}
+      {isFresher && assignPanel && (
+        <div className="flex items-center gap-2 mb-4 p-2 rounded-lg bg-surface border border-border">
+          <button
+            type="button"
+            onClick={() => { setPanelMode(false); setSelectedPanelIds([]); }}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+              !panelMode ? "bg-primary text-white" : "text-foreground-secondary hover:text-foreground"
+            }`}
+          >
+            Single
+          </button>
+          <button
+            type="button"
+            onClick={() => { setPanelMode(true); setSelectedId(""); }}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+              panelMode ? "bg-primary text-white" : "text-foreground-secondary hover:text-foreground"
+            }`}
+          >
+            Panel
+          </button>
+        </div>
+      )}
+
       <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-medium mb-1 text-foreground">
-            Select Interviewer
+            {panelMode ? "Select Interviewers (2+)" : "Select Interviewer"}
           </label>
           <input
             type="text"
@@ -120,21 +237,33 @@ export default function AssignInterviewModal({
             ) : (
               filteredInterviewers.map((u) => {
                 const alreadyInterviewed = completedInterviewerIds.includes(u.id);
+                const isSelected = panelMode
+                  ? selectedPanelIds.includes(u.id)
+                  : selectedId === u.id;
                 return (
                   <label
                     key={u.id}
                     className={`flex items-center gap-3 flex-wrap px-3 py-2 cursor-pointer hover:bg-surface/50 transition-colors ${
-                      selectedId === u.id ? "bg-surface" : ""
+                      isSelected ? "bg-surface" : ""
                     }`}
                   >
-                    <input
-                      type="radio"
-                      name="interviewerRadio"
-                      value={u.id}
-                      checked={selectedId === u.id}
-                      onChange={() => setSelectedId(u.id)}
-                      className="accent-primary flex-shrink-0"
-                    />
+                    {panelMode ? (
+                      <input
+                        type="checkbox"
+                        checked={selectedPanelIds.includes(u.id)}
+                        onChange={() => togglePanelId(u.id)}
+                        className="accent-primary flex-shrink-0"
+                      />
+                    ) : (
+                      <input
+                        type="radio"
+                        name="interviewerRadio"
+                        value={u.id}
+                        checked={selectedId === u.id}
+                        onChange={() => setSelectedId(u.id)}
+                        className="accent-primary flex-shrink-0"
+                      />
+                    )}
                     <span className="text-sm text-foreground truncate">
                       {u.name || u.email}
                       {u.name && (
@@ -144,6 +273,7 @@ export default function AssignInterviewModal({
                       )}
                     </span>
                     <span className="ml-auto flex items-center gap-1.5 flex-shrink-0">
+                      {getSettingBadge(u.id)}
                       {campaignType === "experienced" && slotCountMap[u.id] > 0 && (
                         <span className="text-xs bg-green-100 text-green-700 border border-green-300 rounded-full px-2 py-0.5 font-medium whitespace-nowrap">
                           {slotCountMap[u.id]} slot{slotCountMap[u.id] !== 1 ? "s" : ""}
@@ -231,10 +361,14 @@ export default function AssignInterviewModal({
           </button>
           <button
             type="submit"
-            disabled={isPending || !selectedId}
+            disabled={isPending || !canSubmit}
             className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-hover disabled:opacity-50"
           >
-            {isPending ? "Assigning..." : "Assign Interview"}
+            {isPending
+              ? "Assigning..."
+              : panelMode
+              ? `Assign Panel (${selectedPanelIds.length})`
+              : "Assign Interview"}
           </button>
         </div>
       </form>

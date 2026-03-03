@@ -23,7 +23,7 @@ export default function CompleteInterviewForm({ interviewId, campaignType }: { i
     { value: "HIRE", label: "HIRE" },
     { value: "NO_HIRE", label: "NO HIRE" },
     { value: "WEAK_HIRE", label: "WEAK HIRE" },
-    ...(campaignType === "experienced" ? [{ value: "NO_SHOW", label: "NO SHOW" }] : []),
+    ...(campaignType === "lateral" ? [{ value: "NO_SHOW", label: "NO SHOW" }] : []),
   ];
 
   function addSkillRow() {

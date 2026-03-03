@@ -69,14 +69,14 @@ export default function EditCandidateModal({
               className="w-full border border-border rounded px-3 py-2 bg-card text-foreground placeholder:text-foreground-muted" />
           </div>
         </div>
-        {campaignType === "experienced" && (
+        {campaignType === "lateral" && (
         <div>
           <label htmlFor="edit-currentRole" className="block text-sm font-medium mb-1 text-foreground">Current Role</label>
           <input id="edit-currentRole" name="currentRole" type="text" defaultValue={candidate.currentRole ?? ""} placeholder="e.g. Software Engineer"
             className="w-full border border-border rounded px-3 py-2 bg-card text-foreground placeholder:text-foreground-muted" />
         </div>
         )}
-        {campaignType !== "experienced" && (
+        {campaignType !== "lateral" && (
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label htmlFor="edit-college" className="block text-sm font-medium mb-1 text-foreground">College</label>

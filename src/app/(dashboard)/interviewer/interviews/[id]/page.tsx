@@ -53,7 +53,7 @@ export default async function InterviewDetailPage({
     : false;
 
   const campaignType = interview.candidate.campaign?.type;
-  const isExperienced = campaignType === "experienced";
+  const isLateral = campaignType === "lateral";
   const feedbackResult = interview.feedback?.result;
   const canEditFeedback =
     interview.status === "completed" &&
@@ -116,8 +116,8 @@ export default async function InterviewDetailPage({
             {interview.candidate.email} &middot; {interview.candidate.campaign?.name}
           </p>
           {interview.candidate.phone && <p className="text-sm text-foreground-secondary">Phone: {interview.candidate.phone}</p>}
-          {!isExperienced && interview.candidate.college && <p className="text-sm text-foreground-secondary">College: {interview.candidate.college}</p>}
-          {!isExperienced && interview.candidate.department && <p className="text-sm text-foreground-secondary">Department: {interview.candidate.department}</p>}
+          {!isLateral && interview.candidate.college && <p className="text-sm text-foreground-secondary">College: {interview.candidate.college}</p>}
+          {!isLateral && interview.candidate.department && <p className="text-sm text-foreground-secondary">Department: {interview.candidate.department}</p>}
           {interview.candidate.resumeLink && (
             <p className="text-sm">
               Resume:{" "}

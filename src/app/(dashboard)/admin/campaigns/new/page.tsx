@@ -12,7 +12,7 @@ async function createCampaign(formData: FormData) {
   const name = formData.get("name") as string;
   const type = formData.get("type") as string;
   if (!name?.trim()) return;
-  if (type !== "experienced" && type !== "fresher") return;
+  if (type !== "lateral" && type !== "fresher") return;
   const campaign = await prisma.campaign.create({
     data: {
       name: name.trim(),

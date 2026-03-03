@@ -102,7 +102,7 @@ export default function CandidateNewForm({
           className="w-full border border-border rounded px-3 py-2 bg-card text-foreground placeholder:text-foreground-muted"
         />
       </div>
-      {campaignType === "experienced" && (
+      {campaignType === "lateral" && (
         <div>
           <label htmlFor="currentRole" className="block text-sm font-medium mb-1 text-foreground">Current Role</label>
           <input

@@ -123,7 +123,7 @@ export default function CandidatesPageClient({
   const view = searchParams.get("view") === "overall" ? "overall" : "table";
   const [modal, setModal] = useState<ModalState>({ type: "none" });
   const [actionPending, startActionTransition] = useTransition();
-  const isExperienced = campaignType === "experienced";
+  const isLateral = campaignType === "lateral";
   const [toastInfo, setToastInfo] = useState<{ candidateName: string; mode?: string | null; roomNumber?: string | null; meetLink?: string | null } | null>(null);
 
   function setView(newView: "table" | "overall") {
@@ -276,8 +276,8 @@ export default function CandidatesPageClient({
                     <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border whitespace-nowrap">Round</th>
                     <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border whitespace-nowrap">Phone</th>
                     <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border whitespace-nowrap">Email</th>
-                    {!isExperienced && <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border whitespace-nowrap">College</th>}
-                    {!isExperienced && <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border whitespace-nowrap">Department</th>}
+                    {!isLateral && <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border whitespace-nowrap">College</th>}
+                    {!isLateral && <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border whitespace-nowrap">Department</th>}
                     <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border whitespace-nowrap">Resume</th>
                     <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border whitespace-nowrap">Current Role</th>
                     <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border whitespace-nowrap">Hired Role</th>
@@ -323,8 +323,8 @@ export default function CandidatesPageClient({
                       <td className="px-5 py-4 text-foreground-secondary whitespace-nowrap">{getCurrentRound(c)}</td>
                       <td className="px-5 py-4 text-foreground-secondary whitespace-nowrap">{c.phone ?? "—"}</td>
                       <td className="px-5 py-4 text-foreground-secondary whitespace-nowrap">{c.email}</td>
-                      {!isExperienced && <td className="px-5 py-4 text-foreground-secondary whitespace-nowrap">{c.college ?? "—"}</td>}
-                      {!isExperienced && <td className="px-5 py-4 text-foreground-secondary whitespace-nowrap">{c.department ?? "—"}</td>}
+                      {!isLateral && <td className="px-5 py-4 text-foreground-secondary whitespace-nowrap">{c.college ?? "—"}</td>}
+                      {!isLateral && <td className="px-5 py-4 text-foreground-secondary whitespace-nowrap">{c.department ?? "—"}</td>}
                       <td className="px-5 py-4 whitespace-nowrap">
                         {c.resumeLink ? (
                           <a
@@ -412,8 +412,8 @@ export default function CandidatesPageClient({
                                 </button>
                               );
                             })()}
-                            {/* Cancel scheduled interview — experienced campaigns only */}
-                            {isExperienced && c.displayStatus === "interview_scheduled" && (
+                            {/* Cancel scheduled interview — lateral campaigns only */}
+                            {isLateral && c.displayStatus === "interview_scheduled" && (
                               <button
                                 onClick={() => setModal({ type: "cancelInterview", candidate: c })}
                                 className="text-foreground-secondary hover:text-danger transition-colors"
@@ -531,7 +531,7 @@ export default function CandidatesPageClient({
             />
           )}
           {modal.type === "uploadCsv" && (
-            isExperienced ? (
+            isLateral ? (
               <UploadCsvWithHistoryModal
                 open
                 onClose={closeModal}

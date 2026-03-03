@@ -58,7 +58,7 @@ export default function AddCandidateModal({
               className="w-full border border-border rounded px-3 py-2 bg-card text-foreground placeholder:text-foreground-muted" />
           </div>
         </div>
-        {campaignType !== "experienced" && (
+        {campaignType !== "lateral" && (
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label htmlFor="add-college" className="block text-sm font-medium mb-1 text-foreground">College</label>
@@ -72,7 +72,7 @@ export default function AddCandidateModal({
           </div>
         </div>
         )}
-        {campaignType === "experienced" && (
+        {campaignType === "lateral" && (
           <div>
             <label htmlFor="add-currentRole" className="block text-sm font-medium mb-1 text-foreground">Current Role</label>
             <input id="add-currentRole" name="currentRole" type="text" placeholder="e.g. Software Engineer, Product Manager"

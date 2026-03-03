@@ -24,7 +24,7 @@ export default async function InterviewerAvailabilityPage({
   });
 
   if (!campaign) notFound();
-  if (campaign.type !== "experienced" || campaign.status !== "active") {
+  if (campaign.type !== "lateral" || campaign.status !== "active") {
     redirect(`/interviewer/campaigns/${id}`);
   }
 

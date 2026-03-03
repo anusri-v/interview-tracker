@@ -274,7 +274,7 @@ export default function AssignInterviewModal({
                     </span>
                     <span className="ml-auto flex items-center gap-1.5 flex-shrink-0">
                       {getSettingBadge(u.id)}
-                      {campaignType === "experienced" && slotCountMap[u.id] > 0 && (
+                      {campaignType === "lateral" && slotCountMap[u.id] > 0 && (
                         <span className="text-xs bg-green-100 text-green-700 border border-green-300 rounded-full px-2 py-0.5 font-medium whitespace-nowrap">
                           {slotCountMap[u.id]} slot{slotCountMap[u.id] !== 1 ? "s" : ""}
                         </span>
@@ -301,7 +301,7 @@ export default function AssignInterviewModal({
             )}
           </div>
         </div>
-        {campaignType === "experienced" && selectedId && selectedSlots.length > 0 && (
+        {campaignType === "lateral" && selectedId && selectedSlots.length > 0 && (
           <div>
             <label className="block text-sm font-medium mb-1 text-foreground">
               Available Slots

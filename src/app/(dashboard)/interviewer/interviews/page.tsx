@@ -103,7 +103,7 @@ export default async function MyInterviewsPage({
               currentMeetLink={interviewModeSetting?.meetLink ?? null}
             />
           )}
-          {selectedCampaign?.type === "experienced" && selectedCampaign.status === "active" && (
+          {selectedCampaign?.type === "lateral" && selectedCampaign.status === "active" && (
             <Link
               href={`/interviewer/campaigns/${selectedCampaign.id}/availability`}
               className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors"

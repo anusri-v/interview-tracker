@@ -50,7 +50,7 @@ export default function CampaignNewForm({
             required
           >
             <option value="">Select type…</option>
-            <option value="experienced">Experienced</option>
+            <option value="lateral">Experienced</option>
             <option value="fresher">Fresher</option>
           </select>
         </div>

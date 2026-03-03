@@ -253,7 +253,7 @@ async function cancelScheduledInterview(candidateId: string) {
     },
   });
   if (!candidate || candidate.campaign.status === "completed") return;
-  if (candidate.campaign.type !== "experienced") return;
+  if (candidate.campaign.type !== "lateral") return;
   const scheduledInterview = candidate.interviews[0];
   if (!scheduledInterview) return;
   await prisma.interview.delete({ where: { id: scheduledInterview.id } });

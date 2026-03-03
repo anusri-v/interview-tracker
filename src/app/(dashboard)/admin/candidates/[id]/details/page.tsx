@@ -72,7 +72,7 @@ export default async function CandidateDetailsPage({
     settingMap[s.interviewerId] = { mode: s.mode, roomNumber: s.roomNumber, meetLink: s.meetLink };
   }
 
-  const isExperienced = candidate.campaign?.type === "experienced";
+  const isLateral = candidate.campaign?.type === "lateral";
   const activeInterviews = candidate.interviews.filter(
     (i) => i.status === "scheduled" || i.status === "ongoing"
   );
@@ -103,10 +103,10 @@ export default async function CandidateDetailsPage({
           {candidate.phone && (
             <p className="text-sm text-foreground-secondary">Phone: {candidate.phone}</p>
           )}
-          {!isExperienced && candidate.college && (
+          {!isLateral && candidate.college && (
             <p className="text-sm text-foreground-secondary">College: {candidate.college}</p>
           )}
-          {!isExperienced && candidate.department && (
+          {!isLateral && candidate.department && (
             <p className="text-sm text-foreground-secondary">Department: {candidate.department}</p>
           )}
           {candidate.resumeLink && (

@@ -32,7 +32,7 @@ export default async function InterviewerCandidateDetailPage({
 
   const allInterviews = candidate.interviews;
 
-  const isExperienced = candidate.campaign?.type === "experienced";
+  const isLateral = candidate.campaign?.type === "lateral";
 
   const completedInterviews = allInterviews.filter((i) => i.status === "completed");
 
@@ -73,8 +73,8 @@ export default async function InterviewerCandidateDetailPage({
         <div className="mt-3 space-y-1">
           <p className="text-sm text-foreground-secondary">{candidate.email}</p>
           {candidate.phone && <p className="text-sm text-foreground-secondary">Phone: {candidate.phone}</p>}
-          {!isExperienced && candidate.college && <p className="text-sm text-foreground-secondary">College: {candidate.college}</p>}
-          {!isExperienced && candidate.department && <p className="text-sm text-foreground-secondary">Department: {candidate.department}</p>}
+          {!isLateral && candidate.college && <p className="text-sm text-foreground-secondary">College: {candidate.college}</p>}
+          {!isLateral && candidate.department && <p className="text-sm text-foreground-secondary">Department: {candidate.department}</p>}
           {candidate.resumeLink && (
             <p className="text-sm">
               Resume:{" "}

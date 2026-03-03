@@ -14,7 +14,7 @@ async function createCampaign(formData: FormData) {
   const name = formData.get("name") as string;
   const type = formData.get("type") as string;
   if (!name?.trim()) return;
-  if (type !== "experienced" && type !== "fresher") return;
+  if (type !== "lateral" && type !== "fresher") return;
   const campaign = await prisma.campaign.create({
     data: {
       name: name.trim(),
@@ -62,11 +62,11 @@ export default async function CampaignsListPage() {
                   </td>
                   <td className="px-5 py-4">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      c.type === "experienced"
+                      c.type === "lateral"
                         ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
                         : "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300"
                     }`}>
-                      {c.type === "experienced" ? "Experienced" : "Fresher"}
+                      {c.type === "lateral" ? "Experienced" : "Fresher"}
                     </span>
                   </td>
                   <td className="px-5 py-4">

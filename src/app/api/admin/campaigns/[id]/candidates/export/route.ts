@@ -65,6 +65,7 @@ export async function GET(
     "status",
     "current_role",
     "hired_role",
+    "notice_period",
     "round",
   ];
   const headerLine = headers.join(",");
@@ -87,6 +88,7 @@ export async function GET(
       escapeCsvCell(displayStatus),
       escapeCsvCell(c.currentRole),
       escapeCsvCell(c.hiredRole),
+      escapeCsvCell(c.noticePeriod),
       escapeCsvCell(String(round)),
     ].join(",");
   });

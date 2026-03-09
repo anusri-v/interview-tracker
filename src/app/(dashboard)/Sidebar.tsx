@@ -243,7 +243,7 @@ export default function Sidebar({
               return selected.type === "fresher" ? (
                 <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">Fresher</span>
               ) : (
-                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">Experienced</span>
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">Lateral</span>
               );
             })()}
           </div>

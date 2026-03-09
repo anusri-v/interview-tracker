@@ -19,6 +19,9 @@ export default function OverallView({
   const pipelineCandidates = candidates.filter((c) => c.status === "in_pipeline");
   const selectedCandidates = candidates.filter((c) => c.status === "selected");
   const rejectedCandidates = candidates.filter((c) => c.status === "rejected");
+  const offerInProcessCandidates = candidates.filter((c) => c.status === "offer_in_process");
+  const offerAcceptedCandidates = candidates.filter((c) => c.status === "offer_accepted");
+  const droppedCandidates = candidates.filter((c) => c.status === "dropped");
 
   // Group pipeline candidates by round
   const roundGroups: Record<number, CandidateWithInterviews[]> = {};
@@ -152,6 +155,66 @@ export default function OverallView({
                 key={c.id}
                 href={`/admin/campaigns/${campaignId}/candidates/${c.id}`}
                 className="border border-success text-success bg-transparent rounded-lg px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity"
+              >
+                {c.name}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {offerInProcessCandidates.length > 0 && (
+        <div className="border border-amber-400 rounded-lg p-4">
+          <h3 className="text-sm font-semibold text-amber-600 mb-3">
+            Offer In Process
+            <span className="text-foreground-muted font-normal ml-2">({offerInProcessCandidates.length})</span>
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {offerInProcessCandidates.map((c) => (
+              <Link
+                key={c.id}
+                href={`/admin/campaigns/${campaignId}/candidates/${c.id}`}
+                className="border border-amber-400 text-amber-700 bg-transparent rounded-lg px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity"
+              >
+                {c.name}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {offerAcceptedCandidates.length > 0 && (
+        <div className="border border-green-400 rounded-lg p-4">
+          <h3 className="text-sm font-semibold text-green-600 mb-3">
+            Offer Accepted
+            <span className="text-foreground-muted font-normal ml-2">({offerAcceptedCandidates.length})</span>
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {offerAcceptedCandidates.map((c) => (
+              <Link
+                key={c.id}
+                href={`/admin/campaigns/${campaignId}/candidates/${c.id}`}
+                className="border border-green-400 text-green-700 bg-transparent rounded-lg px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity"
+              >
+                {c.name}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {droppedCandidates.length > 0 && (
+        <div className="border border-danger/30 rounded-lg p-4">
+          <h3 className="text-sm font-semibold text-danger mb-3">
+            Dropped Candidates
+            <span className="text-foreground-muted font-normal ml-2">({droppedCandidates.length})</span>
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {droppedCandidates.map((c) => (
+              <Link
+                key={c.id}
+                href={`/admin/campaigns/${campaignId}/candidates/${c.id}`}
+                className="border border-danger text-danger bg-transparent rounded-lg px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity line-through"
               >
                 {c.name}
               </Link>

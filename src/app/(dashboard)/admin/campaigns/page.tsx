@@ -66,7 +66,7 @@ export default async function CampaignsListPage() {
                         ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
                         : "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300"
                     }`}>
-                      {c.type === "lateral" ? "Experienced" : "Fresher"}
+                      {c.type === "lateral" ? "Lateral" : "Fresher"}
                     </span>
                   </td>
                   <td className="px-5 py-4">

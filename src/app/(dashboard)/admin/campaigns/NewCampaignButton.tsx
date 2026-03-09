@@ -95,7 +95,7 @@ export default function NewCampaignButton({
                   required
                 >
                   <option value="">Select type…</option>
-                  <option value="lateral">Experienced</option>
+                  <option value="lateral">Lateral</option>
                   <option value="fresher">Fresher</option>
                 </select>
               </div>

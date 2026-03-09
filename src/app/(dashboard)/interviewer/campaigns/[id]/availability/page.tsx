@@ -30,13 +30,14 @@ export default async function InterviewerAvailabilityPage({
 
   const slots = await prisma.interviewerSlot.findMany({
     where: { campaignId: id, interviewerId: session.user.id },
-    select: { id: true, startTime: true },
+    select: { id: true, startTime: true, interviewId: true },
     orderBy: { startTime: "asc" },
   });
 
   const serializedSlots = slots.map((s) => ({
     id: s.id,
     startTime: s.startTime.toISOString(),
+    interviewId: s.interviewId,
   }));
 
   async function addSlots(startTimes: string[]) {
@@ -63,8 +64,15 @@ export default async function InterviewerAvailabilityPage({
     const sess = await getServerSession(authOptions);
     if (!sess?.user?.id) return;
 
-    await prisma.interviewerSlot.deleteMany({
-      where: { id: slotId, interviewerId: sess.user.id },
+    // Only allow removal if slot is not linked to an interview
+    const slot = await prisma.interviewerSlot.findUnique({
+      where: { id: slotId },
+      select: { interviewId: true, interviewerId: true },
+    });
+    if (!slot || slot.interviewerId !== sess.user.id || slot.interviewId) return;
+
+    await prisma.interviewerSlot.delete({
+      where: { id: slotId },
     });
 
     revalidatePath(`/interviewer/campaigns/${id}/availability`);

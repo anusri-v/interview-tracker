@@ -94,13 +94,16 @@ model Candidate {
   hiredRole   String?        // role when selected/hired (e.g. "SDE", "QA")
   currentRole String?        // current/previous role (e.g. "Software Engineer")
   dateFirstSpoken DateTime?
-  source      String?        // "Employee Referral", "Online", "Vendor"
+  source       String?        // "Employee Referral", "Online", "Vendor"
+  sourceDetail String?        // portal name, referrer name, or vendor name
   yearsOfExperience Float?
   company     String?
   location    String?
   currentCtc  String?
   expectedCtc String?
+  noticePeriod String?
   dropReason  String?
+  onboardingDate DateTime?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
   interviews  Interview[]

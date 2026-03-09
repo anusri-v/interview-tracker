@@ -13,7 +13,16 @@ type CandidateRow = {
   department?: string;
   resumeLink?: string;
   currentRole?: string;
-  rounds?: { interviewerEmail: string; result: string; feedback?: string }[];
+  company?: string;
+  yearsOfExperience?: string;
+  location?: string;
+  source?: string;
+  sourceDetail?: string;
+  dateFirstSpoken?: string;
+  currentCtc?: string;
+  expectedCtc?: string;
+  noticePeriod?: string;
+  rounds?: { interviewerName: string; result: string; feedback?: string; date?: string }[];
 };
 
 const VALID_RESULTS = ["HIRE", "NO_HIRE", "WEAK_HIRE", "NO_SHOW"];
@@ -55,6 +64,15 @@ export async function POST(
     department: c.department?.trim() || null,
     resumeLink: c.resumeLink?.trim() || null,
     currentRole: campaign.type === "fresher" ? "Fresher" : (c.currentRole?.trim() || null),
+    company: c.company?.trim() || null,
+    yearsOfExperience: c.yearsOfExperience ? parseFloat(c.yearsOfExperience) || null : null,
+    location: c.location?.trim() || null,
+    source: c.source?.trim() || null,
+    sourceDetail: c.sourceDetail?.trim() || null,
+    dateFirstSpoken: c.dateFirstSpoken ? new Date(c.dateFirstSpoken) : null,
+    currentCtc: c.currentCtc?.trim() || null,
+    expectedCtc: c.expectedCtc?.trim() || null,
+    noticePeriod: c.noticePeriod?.trim() || null,
   }));
 
   // Find existing candidates by email or phone to identify duplicates
@@ -110,21 +128,15 @@ export async function POST(
       candidateByEmail[c.email.toLowerCase()] = c.id;
     }
 
-    // Collect all unique interviewer emails, look up in User table
-    const interviewerEmails = [
-      ...new Set(
-        candidatesWithRounds.flatMap(
-          (c) => c.rounds!.map((r) => r.interviewerEmail.trim().toLowerCase())
-        )
-      ),
-    ];
+    // Collect all users and build a name→id lookup map
     const dbUsers = await prisma.user.findMany({
-      where: { email: { in: interviewerEmails } },
-      select: { id: true, email: true },
+      select: { id: true, name: true, email: true },
     });
-    const userByEmail: Record<string, string> = {};
+    const userByName: Record<string, string> = {};
     for (const u of dbUsers) {
-      userByEmail[u.email.toLowerCase()] = u.id;
+      if (u.name) {
+        userByName[u.name.toLowerCase()] = u.id;
+      }
     }
 
     // Process each candidate with rounds
@@ -136,10 +148,10 @@ export async function POST(
       let lastResult: string | null = null;
 
       for (const round of c.rounds!) {
-        const interviewerEmail = round.interviewerEmail.trim().toLowerCase();
-        const interviewerId = userByEmail[interviewerEmail];
+        const interviewerName = round.interviewerName.trim().toLowerCase();
+        const interviewerId = userByName[interviewerName];
         if (!interviewerId) {
-          warnings.push(`Interviewer "${round.interviewerEmail}" not found — skipped for ${c.email}`);
+          warnings.push(`Interviewer "${round.interviewerName}" not found — skipped for ${c.email}`);
           continue;
         }
 
@@ -154,9 +166,9 @@ export async function POST(
             data: {
               candidateId,
               interviewerId,
-              scheduledAt: new Date(),
+              scheduledAt: round.date ? new Date(round.date) : new Date(),
               status: "completed",
-              completedAt: new Date(),
+              completedAt: round.date ? new Date(round.date) : new Date(),
               feedback: {
                 create: {
                   result: result as any,
@@ -172,7 +184,7 @@ export async function POST(
             error instanceof Prisma.PrismaClientKnownRequestError &&
             error.code === "P2002"
           ) {
-            warnings.push(`Duplicate interview: ${interviewerEmail} → ${c.email} — skipped`);
+            warnings.push(`Duplicate interview: ${round.interviewerName} → ${c.email} — skipped`);
             continue;
           }
           throw error;

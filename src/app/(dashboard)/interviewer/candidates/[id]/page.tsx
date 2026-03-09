@@ -32,6 +32,7 @@ export default async function InterviewerCandidateDetailPage({
 
   const allInterviews = candidate.interviews;
 
+  const isAdmin = session.user.role === "admin";
   const isLateral = candidate.campaign?.type === "lateral";
 
   const completedInterviews = allInterviews.filter((i) => i.status === "completed");
@@ -87,8 +88,46 @@ export default async function InterviewerCandidateDetailPage({
           <p className="text-sm text-foreground-secondary">Status: {candidate.status}</p>
           {candidate.currentRole && <p className="text-sm text-foreground-secondary">Current Role: {candidate.currentRole}</p>}
           {candidate.hiredRole && <p className="text-sm text-foreground-secondary">Hired Role: {candidate.hiredRole}</p>}
+          {isLateral && candidate.company && (
+            <p className="text-sm text-foreground-secondary">Company: {candidate.company}</p>
+          )}
+          {isLateral && candidate.yearsOfExperience != null && (
+            <p className="text-sm text-foreground-secondary">Years of Experience: {candidate.yearsOfExperience}</p>
+          )}
+          {isLateral && candidate.location && (
+            <p className="text-sm text-foreground-secondary">Location: {candidate.location}</p>
+          )}
+          {isLateral && candidate.dateFirstSpoken && (
+            <p className="text-sm text-foreground-secondary">
+              Date First Spoken: {new Date(candidate.dateFirstSpoken).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+            </p>
+          )}
+          {isAdmin && isLateral && candidate.source && (
+            <p className="text-sm text-foreground-secondary">
+              Source: {candidate.source}{candidate.sourceDetail ? ` — ${candidate.sourceDetail}` : ""}
+            </p>
+          )}
+          {isAdmin && isLateral && candidate.currentCtc && (
+            <p className="text-sm text-foreground-secondary">Current CTC: {candidate.currentCtc}</p>
+          )}
+          {isAdmin && isLateral && candidate.expectedCtc && (
+            <p className="text-sm text-foreground-secondary">Expected CTC: {candidate.expectedCtc}</p>
+          )}
         </div>
       </div>
+
+      {/* Drop Reason Banner */}
+      {candidate.status === "dropped" && candidate.dropReason && (
+        <div className="border border-danger/30 bg-red-50 dark:bg-red-950/20 rounded-xl p-4 flex items-start gap-3">
+          <svg className="w-5 h-5 text-danger flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+          <div>
+            <p className="text-sm font-semibold text-danger">Dropped</p>
+            <p className="text-sm text-foreground-secondary mt-0.5">{candidate.dropReason}</p>
+          </div>
+        </div>
+      )}
 
       <section>
         <h2 className="text-xl font-bold mb-3 text-foreground tracking-tight">Past Interview Feedbacks</h2>

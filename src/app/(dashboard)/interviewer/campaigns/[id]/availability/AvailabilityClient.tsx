@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 
-type Slot = { id: string; startTime: string };
+type Slot = { id: string; startTime: string; interviewId?: string | null };
 
 export default function AvailabilityClient({
   campaignId,
@@ -55,10 +55,10 @@ export default function AvailabilityClient({
     });
   }
 
-  // Group existing future slots by date
+  // Group existing future slots (and assigned slots regardless of time) by date
   const now = new Date();
   const futureSlots = existingSlots
-    .filter((s) => new Date(s.startTime) > now)
+    .filter((s) => new Date(s.startTime) > now || s.interviewId)
     .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 
   const slotsByDate: Record<string, Slot[]> = {};
@@ -115,13 +115,15 @@ export default function AvailabilityClient({
               const iso = new Date(`${selectedDate}T${String(h).padStart(2, "0")}:00:00`).toISOString();
               const selected = toggled.has(iso);
               const existing = isExisting(h);
+              const isPast = selectedDate === todayStr && h <= new Date().getHours();
+              const isDisabled = existing || isPast;
               return (
                 <button
                   key={h}
-                  onClick={() => !existing && toggleHour(h)}
-                  disabled={existing}
+                  onClick={() => !isDisabled && toggleHour(h)}
+                  disabled={isDisabled}
                   className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                    existing
+                    isDisabled
                       ? "bg-surface text-foreground-muted border-border cursor-not-allowed opacity-50"
                       : selected
                       ? "bg-primary text-white border-primary"
@@ -159,19 +161,25 @@ export default function AvailabilityClient({
                   {slots.map((s) => (
                     <div
                       key={s.id}
-                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface border border-border rounded-lg text-sm"
+                      className={`inline-flex items-center gap-2 px-3 py-1.5 border rounded-lg text-sm ${
+                        s.interviewId ? "bg-amber-50 border-amber-200" : "bg-surface border-border"
+                      }`}
                     >
-                      <span className="text-foreground">{formatSlotTime(s.startTime)}</span>
-                      <button
-                        onClick={() => handleRemove(s.id)}
-                        disabled={isPending}
-                        className="text-foreground-muted hover:text-danger transition-colors disabled:opacity-50"
-                        title="Remove slot"
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
+                      <span className={s.interviewId ? "text-amber-900" : "text-foreground"}>{formatSlotTime(s.startTime)}</span>
+                      {s.interviewId ? (
+                        <span className="text-xs font-medium text-amber-600">Assigned</span>
+                      ) : (
+                        <button
+                          onClick={() => handleRemove(s.id)}
+                          disabled={isPending}
+                          className="text-foreground-muted hover:text-danger transition-colors disabled:opacity-50"
+                          title="Remove slot"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>

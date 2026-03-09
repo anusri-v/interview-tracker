@@ -14,6 +14,9 @@ import UploadCsvModal from "@/components/ui/UploadCsvModal";
 import UploadCsvWithHistoryModal from "@/components/ui/UploadCsvWithHistoryModal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ReassignInterviewModal from "@/components/ui/ReassignInterviewModal";
+import DropCandidateModal from "@/components/ui/DropCandidateModal";
+import OfferInProcessModal from "@/components/ui/OfferInProcessModal";
+import OfferAcceptedModal from "@/components/ui/OfferAcceptedModal";
 import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import AssignmentToast from "@/components/ui/AssignmentToast";
 
@@ -28,6 +31,16 @@ export type CandidateWithInterviews = {
   currentRole: string | null;
   hiredRole: string | null;
   status: string;
+  company?: string | null;
+  yearsOfExperience?: number | null;
+  location?: string | null;
+  source?: string | null;
+  sourceDetail?: string | null;
+  currentCtc?: string | null;
+  expectedCtc?: string | null;
+  dateFirstSpoken?: string | null;
+  noticePeriod?: string | null;
+  dropReason?: string | null;
   interviews: {
     id: string;
     status: string;
@@ -60,7 +73,10 @@ type ModalState =
   | { type: "rescheduleNoShow"; candidate: CandidateWithInterviews }
   | { type: "rejectNoShow"; candidate: CandidateWithInterviews }
   | { type: "cancelInterview"; candidate: CandidateWithInterviews }
-  | { type: "reassign"; interviewId: string; candidate: CandidateWithInterviews };
+  | { type: "reassign"; interviewId: string; candidate: CandidateWithInterviews }
+  | { type: "drop"; candidate: CandidateWithInterviews }
+  | { type: "offer_in_process"; candidate: CandidateWithInterviews }
+  | { type: "offer_accepted"; candidate: CandidateWithInterviews };
 
 export default function CandidatesPageClient({
   campaignId,
@@ -88,6 +104,9 @@ export default function CandidatesPageClient({
   roundFilter = "all",
   interviewerSettings = [],
   assignPanel,
+  roleFilter = "all",
+  distinctRoles = [],
+  updatePostSelectionStatus,
 }: {
   campaignId: string;
   campaignType: string;
@@ -114,6 +133,9 @@ export default function CandidatesPageClient({
   roundFilter?: string;
   interviewerSettings?: InterviewerSetting[];
   assignPanel?: (candidateId: string, formData: FormData) => Promise<void>;
+  roleFilter?: string;
+  distinctRoles?: string[];
+  updatePostSelectionStatus?: (candidateId: string, formData: FormData) => Promise<void>;
 }) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -258,6 +280,8 @@ export default function CandidatesPageClient({
             statusFilter={statusFilter as any}
             sort={sort as any}
             roundFilter={roundFilter}
+            roleFilter={roleFilter}
+            distinctRoles={distinctRoles}
           />
 
           {candidates.length === 0 ? (
@@ -280,6 +304,9 @@ export default function CandidatesPageClient({
                     {!isLateral && <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border whitespace-nowrap">Department</th>}
                     <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border whitespace-nowrap">Resume</th>
                     <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border whitespace-nowrap">Current Role</th>
+                    {isLateral && <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border whitespace-nowrap">Company</th>}
+                    {isLateral && <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border whitespace-nowrap">YoE</th>}
+                    {isLateral && !readOnly && <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border whitespace-nowrap">Notice Period</th>}
                     <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border whitespace-nowrap">Hired Role</th>
                     {isActive && !readOnly && <th className="text-left px-5 py-3.5 text-xs font-medium uppercase tracking-wider text-foreground-muted border-b border-border whitespace-nowrap sticky right-0 bg-surface z-10">Actions</th>}
                   </tr>
@@ -315,6 +342,23 @@ export default function CandidatesPageClient({
                               </span>
                             </span>
                           )}
+                          {c.status === "dropped" && c.dropReason && (
+                            <span className="relative group" title={c.dropReason}>
+                              <svg
+                                className="w-4 h-4 text-danger cursor-help"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={1.5}
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
+                                />
+                              </svg>
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="px-5 py-4 whitespace-nowrap">
@@ -340,6 +384,9 @@ export default function CandidatesPageClient({
                         )}
                       </td>
                       <td className="px-5 py-4 text-foreground-secondary whitespace-nowrap">{c.currentRole ?? "—"}</td>
+                      {isLateral && <td className="px-5 py-4 text-foreground-secondary whitespace-nowrap">{c.company ?? "—"}</td>}
+                      {isLateral && <td className="px-5 py-4 text-foreground-secondary whitespace-nowrap">{c.yearsOfExperience != null ? c.yearsOfExperience : "—"}</td>}
+                      {isLateral && !readOnly && <td className="px-5 py-4 text-foreground-secondary whitespace-nowrap">{c.noticePeriod ?? "—"}</td>}
                       <td className="px-5 py-4 text-foreground-secondary whitespace-nowrap">{c.hiredRole ?? "—"}</td>
                       {isActive && !readOnly && (
                         <td className="px-5 py-4 whitespace-nowrap sticky right-0 bg-card z-10 shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.1)]">
@@ -435,6 +482,47 @@ export default function CandidatesPageClient({
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                               </button>
+                            )}
+                            {/* Post-selection actions for lateral campaigns */}
+                            {isLateral && c.displayStatus === "selected" && (
+                              <>
+                                <button
+                                  onClick={() => setModal({ type: "offer_in_process", candidate: c })}
+                                  className="px-2 py-1 text-xs font-medium rounded-lg bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200 disabled:opacity-50"
+                                  title="Mark Offer In Process"
+                                >
+                                  Offer In Process
+                                </button>
+                                <button
+                                  onClick={() => setModal({ type: "drop", candidate: c })}
+                                  className="text-foreground-secondary hover:text-danger transition-colors"
+                                  title="Drop Candidate"
+                                >
+                                  <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                  </svg>
+                                </button>
+                              </>
+                            )}
+                            {isLateral && c.displayStatus === "offer_in_process" && (
+                              <>
+                                <button
+                                  onClick={() => setModal({ type: "offer_accepted", candidate: c })}
+                                  className="px-2 py-1 text-xs font-medium rounded-lg bg-green-100 text-green-700 border border-green-300 hover:bg-green-200 disabled:opacity-50"
+                                  title="Mark Offer Accepted"
+                                >
+                                  Offer Accepted
+                                </button>
+                                <button
+                                  onClick={() => setModal({ type: "drop", candidate: c })}
+                                  className="text-foreground-secondary hover:text-danger transition-colors"
+                                  title="Drop Candidate"
+                                >
+                                  <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                  </svg>
+                                </button>
+                              </>
                             )}
                           </div>
                           )}
@@ -565,6 +653,33 @@ export default function CandidatesPageClient({
               />
             );
           })()}
+          {modal.type === "drop" && updatePostSelectionStatus && (
+            <DropCandidateModal
+              open
+              onClose={closeModal}
+              candidateId={modal.candidate.id}
+              candidateName={modal.candidate.name}
+              updatePostSelectionStatus={updatePostSelectionStatus}
+            />
+          )}
+          {modal.type === "offer_in_process" && updatePostSelectionStatus && (
+            <OfferInProcessModal
+              open
+              onClose={closeModal}
+              candidateId={modal.candidate.id}
+              candidateName={modal.candidate.name}
+              updatePostSelectionStatus={updatePostSelectionStatus}
+            />
+          )}
+          {modal.type === "offer_accepted" && updatePostSelectionStatus && (
+            <OfferAcceptedModal
+              open
+              onClose={closeModal}
+              candidateId={modal.candidate.id}
+              candidateName={modal.candidate.name}
+              updatePostSelectionStatus={updatePostSelectionStatus}
+            />
+          )}
           {modal.type === "cancelInterview" && (
             <ConfirmDialog
               open

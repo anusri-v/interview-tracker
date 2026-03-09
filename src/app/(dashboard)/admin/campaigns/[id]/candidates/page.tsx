@@ -16,7 +16,10 @@ export type DisplayStatus =
   | "selected"
   | "interview_scheduled"
   | "interview_ongoing"
-  | "no_show";
+  | "no_show"
+  | "dropped"
+  | "offer_in_process"
+  | "offer_accepted";
 
 export type StatusFilter = DisplayStatus | "all";
 
@@ -29,6 +32,9 @@ function getDisplayStatus(
   if (c.status === "rejected") return "rejected";
   if (c.status === "selected") return "selected";
   if (c.status === "no_show") return "no_show";
+  if (c.status === "dropped") return "dropped";
+  if (c.status === "offer_in_process") return "offer_in_process";
+  if (c.status === "offer_accepted") return "offer_accepted";
   const hasOngoing = c.interviews.some((i) => i.status === "ongoing");
   const hasScheduled = c.interviews.some((i) => i.status === "scheduled");
   if (hasOngoing) return "interview_ongoing";
@@ -44,6 +50,9 @@ const VALID_STATUS_FILTERS: StatusFilter[] = [
   "rejected",
   "selected",
   "no_show",
+  "dropped",
+  "offer_in_process",
+  "offer_accepted",
 ];
 
 async function updateCandidateDetails(candidateId: string, formData: FormData) {
@@ -58,6 +67,17 @@ async function updateCandidateDetails(candidateId: string, formData: FormData) {
   const department = (formData.get("department") as string)?.trim() || null;
   const resumeLink = (formData.get("resumeLink") as string)?.trim() || null;
   const currentRole = (formData.get("currentRole") as string)?.trim() || null;
+  const dateFirstSpokenRaw = (formData.get("dateFirstSpoken") as string)?.trim() || null;
+  const dateFirstSpoken = dateFirstSpokenRaw ? new Date(dateFirstSpokenRaw) : null;
+  const source = (formData.get("source") as string)?.trim() || null;
+  const sourceDetail = (formData.get("sourceDetail") as string)?.trim() || null;
+  const yearsOfExperienceRaw = (formData.get("yearsOfExperience") as string)?.trim();
+  const yearsOfExperience = yearsOfExperienceRaw ? parseFloat(yearsOfExperienceRaw) : null;
+  const company = (formData.get("company") as string)?.trim() || null;
+  const location = (formData.get("location") as string)?.trim() || null;
+  const currentCtc = (formData.get("currentCtc") as string)?.trim() || null;
+  const expectedCtc = (formData.get("expectedCtc") as string)?.trim() || null;
+  const noticePeriod = (formData.get("noticePeriod") as string)?.trim() || null;
   const c = await prisma.candidate.findUnique({
     where: { id: candidateId },
     include: { campaign: { select: { id: true, status: true } } },
@@ -66,7 +86,7 @@ async function updateCandidateDetails(candidateId: string, formData: FormData) {
   if (c.campaign.status === "completed") return;
   await prisma.candidate.update({
     where: { id: candidateId },
-    data: { name, email, phone, college, department, resumeLink, currentRole },
+    data: { name, email, phone, college, department, resumeLink, currentRole, dateFirstSpoken, source, sourceDetail, yearsOfExperience, company, location, currentCtc, expectedCtc, noticePeriod },
   });
   await auditLog({ userId: session.user.id, action: "candidate.update", entityType: "Candidate", entityId: candidateId });
   revalidatePath(`/admin/campaigns/${c.campaignId}/candidates`);
@@ -119,14 +139,21 @@ async function assignInterviewer(candidateId: string, formData: FormData) {
   });
   await auditLog({ userId: session.user.id, action: "interview.assign", entityType: "Interview", entityId: interview.id, metadata: { candidateId, interviewerId } });
 
-  // Consume matching availability slot if one exists
-  await prisma.interviewerSlot.deleteMany({
+  // Link matching availability slot to the interview instead of deleting
+  const matchingSlot = await prisma.interviewerSlot.findFirst({
     where: {
       interviewerId,
       campaignId: candidate.campaignId,
       startTime: scheduledAt,
+      interviewId: null,
     },
   });
+  if (matchingSlot) {
+    await prisma.interviewerSlot.update({
+      where: { id: matchingSlot.id },
+      data: { interviewId: interview.id },
+    });
+  }
 
   revalidatePath(`/admin/campaigns/${candidate.campaignId}/candidates`);
 }
@@ -147,9 +174,20 @@ async function createCandidate(campaignId: string, formData: FormData) {
   const currentRole = campaign.type === "fresher"
     ? "Fresher"
     : (formData.get("currentRole") as string)?.trim() || null;
+  const dateFirstSpokenRaw = (formData.get("dateFirstSpoken") as string)?.trim() || null;
+  const dateFirstSpoken = dateFirstSpokenRaw ? new Date(dateFirstSpokenRaw) : null;
+  const source = (formData.get("source") as string)?.trim() || null;
+  const sourceDetail = (formData.get("sourceDetail") as string)?.trim() || null;
+  const yearsOfExperienceRaw = (formData.get("yearsOfExperience") as string)?.trim();
+  const yearsOfExperience = yearsOfExperienceRaw ? parseFloat(yearsOfExperienceRaw) : null;
+  const company = (formData.get("company") as string)?.trim() || null;
+  const location = (formData.get("location") as string)?.trim() || null;
+  const currentCtc = (formData.get("currentCtc") as string)?.trim() || null;
+  const expectedCtc = (formData.get("expectedCtc") as string)?.trim() || null;
+  const noticePeriodCreate = (formData.get("noticePeriod") as string)?.trim() || null;
   try {
     const candidate = await prisma.candidate.create({
-      data: { campaignId, name, email, phone, college, department, resumeLink, currentRole },
+      data: { campaignId, name, email, phone, college, department, resumeLink, currentRole, dateFirstSpoken, source, sourceDetail, yearsOfExperience, company, location, currentCtc, expectedCtc, noticePeriod: noticePeriodCreate },
     });
     await auditLog({ userId: session.user.id, action: "candidate.create", entityType: "Candidate", entityId: candidate.id, metadata: { campaignId, name, email } });
   } catch (error) {
@@ -227,6 +265,11 @@ async function reassignInterviewer(interviewId: string, formData: FormData) {
   });
   if (existing) return;
 
+  // Unlink old interviewer's slot
+  await prisma.interviewerSlot.updateMany({
+    where: { interviewId },
+    data: { interviewId: null },
+  });
   await prisma.interview.update({
     where: { id: interviewId },
     data: { interviewerId: newInterviewerId },
@@ -256,6 +299,11 @@ async function cancelScheduledInterview(candidateId: string) {
   if (candidate.campaign.type !== "lateral") return;
   const scheduledInterview = candidate.interviews[0];
   if (!scheduledInterview) return;
+  // Unlink any associated slot so it becomes available again
+  await prisma.interviewerSlot.updateMany({
+    where: { interviewId: scheduledInterview.id },
+    data: { interviewId: null },
+  });
   await prisma.interview.delete({ where: { id: scheduledInterview.id } });
   await auditLog({ userId: session.user.id, action: "interview.cancel", entityType: "Interview", entityId: scheduledInterview.id, metadata: { candidateId } });
   revalidatePath(`/admin/campaigns/${candidate.campaignId}/candidates`);
@@ -297,18 +345,55 @@ async function rejectNoShow(candidateId: string) {
   revalidatePath(`/admin/campaigns/${candidate.campaignId}/candidates`);
 }
 
+async function updatePostSelectionStatus(candidateId: string, formData: FormData) {
+  "use server";
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id || session.user.role !== "admin") redirect("/login");
+  const newStatus = formData.get("status") as string;
+  const dropReason = (formData.get("dropReason") as string)?.trim() || null;
+  const candidate = await prisma.candidate.findUnique({
+    where: { id: candidateId },
+    include: { campaign: { select: { id: true, status: true, type: true } } },
+  });
+  if (!candidate || candidate.campaign.status === "completed") return;
+  if (candidate.campaign.type !== "lateral") return;
+
+  // Validate transitions
+  const validTransitions: Record<string, string[]> = {
+    selected: ["offer_in_process", "dropped"],
+    offer_in_process: ["offer_accepted", "dropped"],
+  };
+  const allowed = validTransitions[candidate.status];
+  if (!allowed || !allowed.includes(newStatus)) return;
+
+  const data: any = { status: newStatus };
+  if (newStatus === "dropped" && dropReason) {
+    data.dropReason = dropReason;
+  }
+  if (newStatus === "offer_accepted") {
+    const onboardingDateRaw = (formData.get("onboardingDate") as string)?.trim() || null;
+    if (onboardingDateRaw) {
+      data.onboardingDate = new Date(onboardingDateRaw);
+    }
+  }
+
+  await prisma.candidate.update({ where: { id: candidateId }, data });
+  await auditLog({ userId: session.user.id, action: "candidate.status_change", entityType: "Candidate", entityId: candidateId, metadata: { status: newStatus, dropReason } });
+  revalidatePath(`/admin/campaigns/${candidate.campaignId}/candidates`);
+}
+
 export default async function CampaignCandidatesPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ search?: string; status?: string; view?: string; page?: string; sort?: string; round?: string }>;
+  searchParams: Promise<{ search?: string; status?: string; view?: string; page?: string; sort?: string; round?: string; role?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || session.user.role !== "admin") redirect("/login");
 
   const { id } = await params;
-  const { search = "", status: statusParam, page: pageParam, sort: sortParam, round: roundParam } = await searchParams;
+  const { search = "", status: statusParam, page: pageParam, sort: sortParam, round: roundParam, role: roleParam } = await searchParams;
   // Support comma-separated multi-status filter
   const statusFilters: StatusFilter[] = typeof statusParam === "string"
     ? statusParam.split(",").filter((s): s is StatusFilter => VALID_STATUS_FILTERS.includes(s as StatusFilter))
@@ -362,7 +447,7 @@ export default async function CampaignCandidatesPage({
       }))
     ),
     prisma.interviewerSlot.findMany({
-      where: { campaignId: id, startTime: { gt: new Date() } },
+      where: { campaignId: id, startTime: { gt: new Date() }, interviewId: null },
       select: { id: true, interviewerId: true, startTime: true },
       orderBy: { startTime: "asc" },
     }).then((slots) =>
@@ -379,6 +464,13 @@ export default async function CampaignCandidatesPage({
   ]);
 
   if (!campaign) notFound();
+
+  // Extract distinct roles for role filter
+  const distinctRoles = [...new Set(
+    campaign.candidates
+      .map((c) => c.currentRole)
+      .filter((r): r is string => !!r)
+  )].sort();
 
   const now = Date.now();
   const sortByWaiting = sortParam === "waiting";
@@ -418,6 +510,16 @@ export default async function CampaignCandidatesPage({
       interviews: c.interviews,
       displayStatus: getDisplayStatus(c),
       waitingHours,
+      dateFirstSpoken: c.dateFirstSpoken?.toISOString() ?? null,
+      source: c.source,
+      sourceDetail: c.sourceDetail,
+      yearsOfExperience: c.yearsOfExperience,
+      company: c.company,
+      location: c.location,
+      currentCtc: c.currentCtc,
+      expectedCtc: c.expectedCtc,
+      noticePeriod: c.noticePeriod,
+      dropReason: c.dropReason,
     };
   });
 
@@ -434,7 +536,7 @@ export default async function CampaignCandidatesPage({
     );
   }
   if (statusFilters.length > 0) {
-    candidates = candidates.filter((c) => statusFilters.includes(c.displayStatus));
+    candidates = candidates.filter((c) => statusFilters.includes(c.displayStatus as StatusFilter));
   }
   const roundFilter = roundParam && ["1", "2", "3", "4", "5"].includes(roundParam) ? roundParam : "all";
   if (roundFilter !== "all") {
@@ -445,6 +547,10 @@ export default async function CampaignCandidatesPage({
       ).length;
       return passedRounds + 1 === roundNum;
     });
+  }
+  const roleFilter = roleParam?.trim() || "all";
+  if (roleFilter !== "all") {
+    candidates = candidates.filter((c) => c.currentRole === roleFilter);
   }
 
   const isActive = campaign.status === "active";
@@ -471,6 +577,8 @@ export default async function CampaignCandidatesPage({
       statusFilter={statusFilter}
       sort={sortByWaiting ? "waiting" : "default"}
       roundFilter={roundFilter}
+      roleFilter={roleFilter}
+      distinctRoles={distinctRoles}
       updateCandidateDetails={updateCandidateDetails}
       updateCandidateStatus={updateCandidateStatus}
       assignInterviewer={assignInterviewer}
@@ -481,6 +589,7 @@ export default async function CampaignCandidatesPage({
       rejectNoShow={rejectNoShow}
       interviewerSettings={interviewerSettings}
       assignPanel={campaign.type === "fresher" ? assignPanel : undefined}
+      updatePostSelectionStatus={updatePostSelectionStatus}
     />
   );
 }

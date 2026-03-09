@@ -12,9 +12,18 @@ type MappingOption =
   | "resume_link"
   | "college"
   | "department"
+  | "company"
+  | "years_of_experience"
+  | "location"
+  | "source"
+  | "source_detail"
+  | "date_first_spoken"
+  | "current_ctc"
+  | "expected_ctc"
+  | "notice_period"
   | "ignore";
 
-type RoundMapping = { interviewer: number; result: number; feedback: number }; // column indices
+type RoundMapping = { interviewer: number; result: number; feedback: number; date: number }; // column indices
 
 type UploadResult = {
   created: number;
@@ -45,13 +54,22 @@ function parseCsvLine(line: string): string[] {
 }
 
 const STANDARD_FIELDS: { key: MappingOption; patterns: RegExp[] }[] = [
-  { key: "name", patterns: [/^name$/i] },
+  { key: "name", patterns: [/^name$/i, /^candidate.?name$/i, /^full.?name$/i] },
   { key: "email", patterns: [/^email$/i, /^e-?mail$/i] },
   { key: "phone", patterns: [/^phone$/i, /^mobile$/i, /^contact$/i] },
   { key: "current_role", patterns: [/^current.?role$/i, /^role$/i, /^designation$/i] },
   { key: "resume_link", patterns: [/^resume/i, /^cv/i] },
   { key: "college", patterns: [/^college$/i, /^university$/i, /^institute$/i] },
   { key: "department", patterns: [/^department$/i, /^dept$/i, /^branch$/i] },
+  { key: "company", patterns: [/^company$/i, /^organization$/i, /^org$/i] },
+  { key: "years_of_experience", patterns: [/^year.?of.?exp/i, /^yoe$/i, /^experience$/i] },
+  { key: "location", patterns: [/^location$/i, /^city$/i] },
+  { key: "source", patterns: [/^source$/i] },
+  { key: "source_detail", patterns: [/^source.?detail$/i, /^portal$/i, /^referred.?by$/i, /^vendor.?name$/i] },
+  { key: "date_first_spoken", patterns: [/^date.?first.?spoken$/i] },
+  { key: "current_ctc", patterns: [/^current.?ctc$/i, /^current.?lpa$/i, /^current.?salary$/i] },
+  { key: "expected_ctc", patterns: [/^expected.?ctc$/i, /^expected.?lpa$/i, /^expected.?salary$/i] },
+  { key: "notice_period", patterns: [/^notice.?period$/i, /^notice$/i] },
 ];
 
 export default function UploadCsvWithHistoryModal({
@@ -140,11 +158,19 @@ export default function UploadCsvWithHistoryModal({
               const rl = rh.toLowerCase().replace(/\s+/g, "_");
               return new RegExp(`^r(?:ound)?_?${roundNum}_?feedback$`).test(rl);
             });
-            detectedRounds.push({ interviewer: i, result: resultIdx, feedback: feedbackIdx });
+            // Find corresponding date column (optional)
+            const dateIdx = rawHeaders.findIndex((rh) => {
+              const rl = rh.toLowerCase().replace(/\s+/g, "_");
+              return new RegExp(`^r(?:ound)?_?${roundNum}_?date$`).test(rl);
+            });
+            detectedRounds.push({ interviewer: i, result: resultIdx, feedback: feedbackIdx, date: dateIdx });
             autoMappings[i] = `round_${detectedRounds.length}_interviewer`;
             autoMappings[resultIdx] = `round_${detectedRounds.length}_result`;
             if (feedbackIdx >= 0) {
               autoMappings[feedbackIdx] = `round_${detectedRounds.length}_feedback`;
+            }
+            if (dateIdx >= 0) {
+              autoMappings[dateIdx] = `round_${detectedRounds.length}_date`;
             }
           }
         }
@@ -167,10 +193,10 @@ export default function UploadCsvWithHistoryModal({
   }
 
   function addRound() {
-    setRoundMappings((prev) => [...prev, { interviewer: -1, result: -1, feedback: -1 }]);
+    setRoundMappings((prev) => [...prev, { interviewer: -1, result: -1, feedback: -1, date: -1 }]);
   }
 
-  function updateRoundMapping(roundIdx: number, field: "interviewer" | "result" | "feedback", colIdx: number) {
+  function updateRoundMapping(roundIdx: number, field: "interviewer" | "result" | "feedback" | "date", colIdx: number) {
     setRoundMappings((prev) => {
       const next = [...prev];
       next[roundIdx] = { ...next[roundIdx], [field]: colIdx };
@@ -192,6 +218,7 @@ export default function UploadCsvWithHistoryModal({
       if (rm.interviewer >= 0) next[rm.interviewer] = "ignore";
       if (rm.result >= 0) next[rm.result] = "ignore";
       if (rm.feedback >= 0) next[rm.feedback] = "ignore";
+      if (rm.date >= 0) next[rm.date] = "ignore";
       return next;
     });
     setRoundMappings((prev) => prev.filter((_, i) => i !== roundIdx));
@@ -222,38 +249,46 @@ export default function UploadCsvWithHistoryModal({
 
   // Build candidate data from mappings
   function buildCandidates() {
-    const nameIdx = mappings.indexOf("name");
-    const emailIdx = mappings.indexOf("email");
-    const phoneIdx = mappings.indexOf("phone");
-    const roleIdx = mappings.indexOf("current_role");
-    const resumeIdx = mappings.indexOf("resume_link");
-    const collegeIdx = mappings.indexOf("college");
-    const deptIdx = mappings.indexOf("department");
+    const idx = (key: string) => mappings.indexOf(key);
+    const val = (values: string[], key: string) => {
+      const i = idx(key);
+      return i >= 0 ? values[i]?.trim() || undefined : undefined;
+    };
 
     return rows
       .map((values) => {
-        const name = values[nameIdx]?.trim();
-        const email = values[emailIdx]?.trim();
+        const name = val(values, "name");
+        const email = val(values, "email");
         if (!name || !email) return null;
 
         const rounds = roundMappings
           .map((rm) => {
-            const interviewerEmail = values[rm.interviewer]?.trim();
+            const interviewerName = values[rm.interviewer]?.trim();
             const result = values[rm.result]?.trim()?.toUpperCase()?.replace(/\s+/g, "_");
-            if (!interviewerEmail || !result) return null;
+            if (!interviewerName || !result) return null;
             const feedback = rm.feedback >= 0 ? values[rm.feedback]?.trim() || undefined : undefined;
-            return { interviewerEmail, result, feedback };
+            const date = rm.date >= 0 ? values[rm.date]?.trim() || undefined : undefined;
+            return { interviewerName, result, feedback, date };
           })
-          .filter(Boolean) as { interviewerEmail: string; result: string; feedback?: string }[];
+          .filter(Boolean) as { interviewerName: string; result: string; feedback?: string; date?: string }[];
 
         return {
           name,
           email,
-          phone: phoneIdx >= 0 ? values[phoneIdx]?.trim() || undefined : undefined,
-          currentRole: roleIdx >= 0 ? values[roleIdx]?.trim() || undefined : undefined,
-          resumeLink: resumeIdx >= 0 ? values[resumeIdx]?.trim() || undefined : undefined,
-          college: collegeIdx >= 0 ? values[collegeIdx]?.trim() || undefined : undefined,
-          department: deptIdx >= 0 ? values[deptIdx]?.trim() || undefined : undefined,
+          phone: val(values, "phone"),
+          currentRole: val(values, "current_role"),
+          resumeLink: val(values, "resume_link"),
+          college: val(values, "college"),
+          department: val(values, "department"),
+          company: val(values, "company"),
+          yearsOfExperience: val(values, "years_of_experience"),
+          location: val(values, "location"),
+          source: val(values, "source"),
+          sourceDetail: val(values, "source_detail"),
+          dateFirstSpoken: val(values, "date_first_spoken"),
+          currentCtc: val(values, "current_ctc"),
+          expectedCtc: val(values, "expected_ctc"),
+          noticePeriod: val(values, "notice_period"),
           rounds: rounds.length > 0 ? rounds : undefined,
         };
       })
@@ -381,7 +416,7 @@ export default function UploadCsvWithHistoryModal({
           <div className="text-sm text-foreground-secondary mb-4 space-y-1">
             <p><strong className="text-foreground">Required columns:</strong> name, email</p>
             <p><strong className="text-foreground">Optional:</strong> phone, current_role, resume_link, college, department</p>
-            <p><strong className="text-foreground">History:</strong> R1 Interviewer, R1 Result, R1 Feedback, R2 Interviewer, R2 Result, R2 Feedback, etc.</p>
+            <p><strong className="text-foreground">History:</strong> R1 Interviewer (name), R1 Result, R1 Date, R1 Feedback, R2 Interviewer, R2 Result, R2 Date, R2 Feedback, etc.</p>
           </div>
           <div>
             <label htmlFor="csv-file-hist" className="block text-sm font-medium mb-1 text-foreground">CSV file</label>
@@ -409,18 +444,43 @@ export default function UploadCsvWithHistoryModal({
       {/* Step 2: Interview Round Mapping */}
       {step === 2 && (
         <div className="space-y-4">
-          {/* Auto-detected fields summary */}
-          <div className="p-3 rounded-lg bg-surface text-sm text-foreground-secondary">
-            <p className="font-medium text-foreground mb-1">Auto-detected columns:</p>
-            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
-              {mappings.map((m, i) =>
-                m !== "ignore" && !String(m).startsWith("round_") ? (
-                  <span key={i}>
-                    <span className="text-foreground">{headers[i]}</span>
-                    <span className="text-foreground-muted"> → {String(m).replace("_", " ")}</span>
-                  </span>
-                ) : null
-              )}
+          {/* Column mapping */}
+          <div>
+            <p className="text-sm font-medium text-foreground mb-2">Map Columns</p>
+            <div className="grid grid-cols-2 gap-2 max-h-48 overflow-auto p-3 bg-surface rounded-lg border border-border">
+              {headers.map((h, i) => {
+                const val = mappings[i] ?? "ignore";
+                const isRound = String(val).startsWith("round_");
+                return (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-xs text-foreground truncate min-w-0 flex-1" title={h}>{h}</span>
+                    <select
+                      value={isRound ? val : val}
+                      onChange={(e) => setMapping(i, e.target.value)}
+                      disabled={isRound}
+                      className="border border-border rounded px-2 py-1 bg-card text-foreground text-xs flex-1 disabled:opacity-50"
+                    >
+                      <option value="ignore">— Ignore —</option>
+                      <option value="name">Name</option>
+                      <option value="email">Email</option>
+                      <option value="phone">Phone</option>
+                      <option value="current_role">Current Role</option>
+                      <option value="resume_link">Resume Link</option>
+                      <option value="college">College</option>
+                      <option value="department">Department</option>
+                      <option value="company">Company</option>
+                      <option value="years_of_experience">Years of Exp</option>
+                      <option value="location">Location</option>
+                      <option value="source">Source</option>
+                      <option value="source_detail">Source Detail</option>
+                      <option value="date_first_spoken">Date First Spoken</option>
+                      <option value="current_ctc">Current CTC</option>
+                      <option value="expected_ctc">Expected CTC</option>
+                      <option value="notice_period">Notice Period</option>
+                    </select>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -439,7 +499,7 @@ export default function UploadCsvWithHistoryModal({
             {roundMappings.length === 0 && (
               <p className="text-sm text-foreground-muted py-4 text-center">No interview history columns detected. Click &quot;+ Add Round&quot; to map them manually.</p>
             )}
-            <div className="space-y-3">
+            <div className="space-y-3 max-h-64 overflow-auto">
               {roundMappings.map((rm, ri) => (
                 <div key={ri} className="p-3 bg-surface rounded-lg border border-border">
                   <div className="flex items-center justify-between mb-2">
@@ -455,9 +515,9 @@ export default function UploadCsvWithHistoryModal({
                       </svg>
                     </button>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-[11px] text-foreground-muted mb-1">Interviewer</label>
+                      <label className="block text-[11px] text-foreground-muted mb-1">Interviewer *</label>
                       <select
                         value={rm.interviewer}
                         onChange={(e) => updateRoundMapping(ri, "interviewer", parseInt(e.target.value))}
@@ -470,13 +530,26 @@ export default function UploadCsvWithHistoryModal({
                       </select>
                     </div>
                     <div>
-                      <label className="block text-[11px] text-foreground-muted mb-1">Result</label>
+                      <label className="block text-[11px] text-foreground-muted mb-1">Result *</label>
                       <select
                         value={rm.result}
                         onChange={(e) => updateRoundMapping(ri, "result", parseInt(e.target.value))}
                         className="w-full border border-border rounded px-2 py-1.5 bg-card text-foreground text-xs"
                       >
                         <option value={-1}>Select column...</option>
+                        {headers.map((h, i) => (
+                          <option key={i} value={i}>{h}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-foreground-muted mb-1">Date (optional)</label>
+                      <select
+                        value={rm.date}
+                        onChange={(e) => updateRoundMapping(ri, "date", parseInt(e.target.value))}
+                        className="w-full border border-border rounded px-2 py-1.5 bg-card text-foreground text-xs"
+                      >
+                        <option value={-1}>None</option>
                         {headers.map((h, i) => (
                           <option key={i} value={i}>{h}</option>
                         ))}

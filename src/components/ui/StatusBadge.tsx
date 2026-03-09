@@ -10,7 +10,10 @@ type BadgeVariant =
   | "hire"
   | "no_hire"
   | "weak_hire"
-  | "no_show";
+  | "no_show"
+  | "dropped"
+  | "offer_in_process"
+  | "offer_accepted";
 
 const variantStyles: Record<BadgeVariant, string> = {
   rejected: "bg-[#FFADAD] text-[#EF4444] border-[#EF4444]",
@@ -25,6 +28,9 @@ const variantStyles: Record<BadgeVariant, string> = {
   no_hire: "bg-[#FFADAD] text-[#EF4444] border-[#EF4444]",
   weak_hire: "bg-[#FFDDA4] text-[#D97706] border-[#F59E0B]",
   no_show: "bg-[#FDE8E8] text-[#B91C1C] border-[#DC2626]",
+  dropped: "bg-[#FFADAD] text-[#EF4444] border-[#EF4444]",
+  offer_in_process: "bg-[#FFF3CD] text-[#D97706] border-[#F59E0B]",
+  offer_accepted: "bg-[#BBFED4] text-[#16A34A] border-[#22C55E]",
 };
 
 const variantLabels: Record<BadgeVariant, string> = {
@@ -40,6 +46,9 @@ const variantLabels: Record<BadgeVariant, string> = {
   no_hire: "NO HIRE",
   weak_hire: "WEAK HIRE",
   no_show: "No Show",
+  dropped: "Dropped",
+  offer_in_process: "Offer In Process",
+  offer_accepted: "Offer Accepted",
 };
 
 export default function StatusBadge({

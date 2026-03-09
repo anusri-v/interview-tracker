@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Modal from "./Modal";
 
@@ -18,6 +18,7 @@ export default function HireCandidateModal({
   updateCandidateStatus: (candidateId: string, formData: FormData) => Promise<void>;
 }) {
   const [isPending, startTransition] = useTransition();
+  const [selectedRole, setSelectedRole] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
 
@@ -39,7 +40,7 @@ export default function HireCandidateModal({
         <input type="hidden" name="status" value="selected" />
         <div>
           <label htmlFor="hire-role" className="block text-sm font-medium mb-1 text-foreground">Select Role</label>
-          <select id="hire-role" name="hiredRole" required
+          <select id="hire-role" value={selectedRole} onChange={(e) => setSelectedRole(e.target.value)}
             className="w-full border border-border rounded px-3 py-2 bg-card text-foreground appearance-none cursor-pointer">
             <option value="">Choose a role…</option>
             <option value="SDE">SDE</option>
@@ -51,6 +52,12 @@ export default function HireCandidateModal({
             <option value="L1">L1</option>
             <option value="Other">Other</option>
           </select>
+          {selectedRole === "Other" ? (
+            <input name="hiredRole" type="text" required placeholder="Enter role…"
+              className="w-full border border-border rounded px-3 py-2 bg-card text-foreground mt-2 placeholder:text-foreground-muted" />
+          ) : (
+            <input type="hidden" name="hiredRole" value={selectedRole} />
+          )}
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} disabled={isPending}

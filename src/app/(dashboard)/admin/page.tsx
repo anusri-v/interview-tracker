@@ -59,7 +59,7 @@ export default async function AdminDashboardPage({
       _count: true,
     }),
     prisma.candidate.findMany({
-      where: { status: "selected", campaignId: selectedCampaign.id },
+      where: { status: { in: ["selected", "offer_in_process", "offer_accepted"] }, campaignId: selectedCampaign.id },
       select: {
         id: true,
         name: true,
@@ -67,6 +67,8 @@ export default async function AdminDashboardPage({
         phone: true,
         currentRole: true,
         hiredRole: true,
+        status: true,
+        onboardingDate: true,
       },
     }),
   ]);
@@ -178,6 +180,9 @@ export default async function AdminDashboardPage({
   const inPipeline =
     candidateCounts.find((c) => c.status === "in_pipeline")?._count ?? 0;
   const selected = candidateCounts.find((c) => c.status === "selected")?._count ?? 0;
+  const offerInProcess = candidateCounts.find((c) => c.status === "offer_in_process")?._count ?? 0;
+  const offerAccepted = candidateCounts.find((c) => c.status === "offer_accepted")?._count ?? 0;
+  const dropped = candidateCounts.find((c) => c.status === "dropped")?._count ?? 0;
 
   const conducted =
     interviewCounts.find((c) => c.status === "completed")?._count ?? 0;
@@ -190,6 +195,9 @@ export default async function AdminDashboardPage({
     { label: "Total Candidates", value: totalCandidates },
     { label: "Candidates in Pipeline", value: inPipeline },
     { label: "Selected Candidates", value: selected },
+    { label: "Offer In Process", value: offerInProcess },
+    { label: "Offer Accepted", value: offerAccepted },
+    { label: "Dropped", value: dropped },
     { label: "Rejected Candidates", value: rejected },
     { label: "Interviews Conducted", value: conducted },
     { label: "Ongoing Interviews", value: ongoing },
@@ -199,6 +207,12 @@ export default async function AdminDashboardPage({
   if (isFresher) {
     stats.push({ label: "Avg. Waiting Time", value: avgWaitingTime ?? "—" });
   }
+
+  // Fetch dropped candidates for the dashboard section
+  const droppedCandidates = await prisma.candidate.findMany({
+    where: { status: "dropped", campaignId: selectedCampaign.id },
+    select: { id: true, name: true, email: true, dropReason: true },
+  });
 
   return (
     <div className="space-y-14">
@@ -305,7 +319,7 @@ export default async function AdminDashboardPage({
       )}
 
       <section className="space-y-4">
-        <h2 className="text-xl font-bold text-foreground tracking-tight">Selected Candidates</h2>
+        <h2 className="text-xl font-bold text-foreground tracking-tight">Selected / Post-Selection Candidates</h2>
         {selectedByRole.length === 0 ? (
           <p className="text-sm text-foreground-muted py-6">None yet.</p>
         ) : (
@@ -314,8 +328,10 @@ export default async function AdminDashboardPage({
               <thead>
                 <tr className="bg-surface">
                   <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">Name</th>
+                  <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">Status</th>
                   <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">Current Role</th>
                   <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">Hired Role</th>
+                  <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">Onboarding</th>
                   <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">Phone</th>
                   <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">Email</th>
                 </tr>
@@ -324,6 +340,9 @@ export default async function AdminDashboardPage({
                 {selectedByRole.map((c) => (
                   <tr key={c.id} className="border-b border-border last:border-0 hover:bg-surface/50 transition-colors">
                     <td className="px-5 py-4 text-foreground font-medium">{c.name}</td>
+                    <td className="px-5 py-4">
+                      <StatusBadge variant={c.status as any} />
+                    </td>
                     <td className="px-5 py-4 text-foreground-secondary">{c.currentRole ?? "—"}</td>
                     <td className="px-5 py-4">
                       {c.hiredRole ? (
@@ -331,6 +350,11 @@ export default async function AdminDashboardPage({
                       ) : (
                         <span className="text-foreground-muted">—</span>
                       )}
+                    </td>
+                    <td className="px-5 py-4 text-foreground-secondary">
+                      {c.onboardingDate
+                        ? new Date(c.onboardingDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+                        : "—"}
                     </td>
                     <td className="px-5 py-4 text-foreground-secondary">{c.phone ?? "—"}</td>
                     <td className="px-5 py-4 text-foreground-secondary">{c.email}</td>
@@ -341,6 +365,32 @@ export default async function AdminDashboardPage({
           </div>
         )}
       </section>
+
+      {droppedCandidates.length > 0 && (
+        <section className="space-y-4">
+          <h2 className="text-xl font-bold text-foreground tracking-tight">Dropped Candidates</h2>
+          <div className="rounded-xl border border-border overflow-hidden bg-card">
+            <table className="w-full text-base border-collapse">
+              <thead>
+                <tr className="bg-surface">
+                  <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">Name</th>
+                  <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">Drop Reason</th>
+                  <th className="border-b border-border px-5 py-3.5 text-left text-xs font-medium uppercase tracking-wider text-foreground-muted">Email</th>
+                </tr>
+              </thead>
+              <tbody>
+                {droppedCandidates.map((c) => (
+                  <tr key={c.id} className="border-b border-border last:border-0 hover:bg-surface/50 transition-colors">
+                    <td className="px-5 py-4 text-foreground font-medium">{c.name}</td>
+                    <td className="px-5 py-4 text-foreground-secondary">{c.dropReason ?? "—"}</td>
+                    <td className="px-5 py-4 text-foreground-secondary">{c.email}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </div>
   );
 }
